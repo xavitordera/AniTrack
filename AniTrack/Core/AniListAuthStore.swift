@@ -1,6 +1,5 @@
 import Foundation
 
-@MainActor
 final class AniListAuthStore: ObservableObject {
     @Published var accessToken: String? {
         didSet {
