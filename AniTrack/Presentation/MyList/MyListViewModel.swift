@@ -10,6 +10,7 @@ final class MyListViewModel: ObservableObject {
     @Published var selectionMode = false
     @Published var selectedIDs: Set<Int> = []
     @Published var isBulkApplying = false
+    @Published var requiresAuthentication = false
 
     private let repository: MyListRepository
 
@@ -30,12 +31,13 @@ final class MyListViewModel: ObservableObject {
         isLoading = true
         errorText = nil
         actionMessage = nil
+        requiresAuthentication = false
 
         do {
             viewer = try await repository.fetchViewer()
             entries = try await repository.fetchMyListEntries()
         } catch {
-            errorText = "Unable to load your list right now."
+            handle(error: error, fallbackMessage: "Unable to load your list right now.")
         }
 
         isLoading = false
@@ -72,7 +74,7 @@ final class MyListViewModel: ObservableObject {
                 actionMessage = "Removed \(entry.media.title) from your list."
             }
         } catch {
-            errorText = "Unable to remove the entry right now."
+            handle(error: error, fallbackMessage: "Unable to remove the entry right now.")
         }
     }
 
@@ -87,7 +89,7 @@ final class MyListViewModel: ObservableObject {
                 actionMessage = "Added \(entry.media.title) to your list."
             }
         } catch {
-            errorText = "Unable to save the entry right now."
+            handle(error: error, fallbackMessage: "Unable to save the entry right now.")
         }
     }
 
@@ -118,11 +120,26 @@ final class MyListViewModel: ObservableObject {
             }
             actionMessage = "Updated \(updatedEntries.count) entries."
         } catch {
-            errorText = "Bulk update failed."
+            handle(error: error, fallbackMessage: "Bulk update failed.")
         }
 
         isBulkApplying = false
         selectedIDs.removeAll()
         selectionMode = false
+    }
+
+    private func handle(error: Error, fallbackMessage: String) {
+        if let serviceError = error as? AniListServiceError {
+            switch serviceError {
+            case .unauthorized:
+                requiresAuthentication = true
+                entries.removeAll()
+                errorText = "Session expired. Please sign in again."
+                return
+            default:
+                break
+            }
+        }
+        errorText = fallbackMessage
     }
 }

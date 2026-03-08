@@ -120,7 +120,6 @@
 			buildPhases = (
 				10DB5E842CE3D3030035DBB4 /* Sources */,
 				10DB5E852CE3D3030035DBB4 /* Frameworks */,
-				10DB5E862CE3D3030035DBB4 /* Resources */,
 			);
 			buildRules = (
 			);

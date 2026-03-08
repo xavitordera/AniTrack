@@ -5,6 +5,7 @@ import OSLog
 enum AniListServiceError: Error {
     case emptyData
     case graphQLErrors([String])
+    case unauthorized
 }
 
 final class AniListGraphQLService {

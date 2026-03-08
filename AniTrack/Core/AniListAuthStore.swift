@@ -1,32 +1,60 @@
 import Foundation
 
+struct AniListTokenRecord: Codable {
+    let token: String
+    let expiresAt: Date?
+
+    var isExpired: Bool {
+        if let expiresAt {
+            return Date() >= expiresAt
+        }
+        return false
+    }
+}
+
 final class AniListAuthStore: ObservableObject {
-    @Published var accessToken: String? {
-        didSet {
-            persistToken(accessToken)
+    @Published private(set) var record: AniListTokenRecord?
+
+    var accessToken: String? {
+        record?.token
+    }
+
+    var isAuthenticated: Bool {
+        guard let record else { return false }
+        return !record.isExpired
+    }
+
+    private let keychainService = "com.xavitordera.anitrack.auth"
+    private let keychainAccount = "aniListToken"
+
+    init() {
+        self.record = loadRecord()
+        if let record, record.isExpired {
+            clear()
         }
     }
 
-    private let tokenKey = "AniTrack.AnilistAccessToken"
-
-    init() {
-        self.accessToken = UserDefaults.standard.string(forKey: tokenKey)
-    }
-
-    func updateToken(_ token: String?) {
-        accessToken = token
+    func updateToken(_ token: String, expiresIn: Int?) {
+        let expires = expiresIn.map { Date().addingTimeInterval(TimeInterval($0)) }
+        let newRecord = AniListTokenRecord(token: token, expiresAt: expires)
+        record = newRecord
+        persist(record: newRecord)
     }
 
     func clear() {
-        accessToken = nil
+        record = nil
+        try? KeychainHelper.delete(service: keychainService, account: keychainAccount)
     }
 
-    private func persistToken(_ token: String?) {
-        let defaults = UserDefaults.standard
-        if let token {
-            defaults.set(token, forKey: tokenKey)
-        } else {
-            defaults.removeObject(forKey: tokenKey)
+    private func persist(record: AniListTokenRecord) {
+        guard let data = try? JSONEncoder().encode(record) else { return }
+        try? KeychainHelper.save(data, service: keychainService, account: keychainAccount)
+    }
+
+    private func loadRecord() -> AniListTokenRecord? {
+        guard let data = try? KeychainHelper.read(service: keychainService, account: keychainAccount) else {
+            return nil
         }
+        return try? JSONDecoder().decode(AniListTokenRecord.self, from: data)
     }
 }

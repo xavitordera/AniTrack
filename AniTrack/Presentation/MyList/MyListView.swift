@@ -4,9 +4,10 @@ struct MyListView: View {
     @StateObject private var viewModel: MyListViewModel
     @ObservedObject private var authStore: AniListAuthStore
 
-    @State private var tokenDraft = ""
     @State private var editingEntry: MediaListEntry?
     @State private var showingBulkSheet = false
+    @State private var isAuthenticating = false
+    @State private var authError: String?
 
     init(viewModel: MyListViewModel, authStore: AniListAuthStore) {
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -61,6 +62,12 @@ struct MyListView: View {
                     Task { await viewModel.load() }
                 }
             }
+            .onChange(of: viewModel.requiresAuthentication) { needsAuth in
+                if needsAuth {
+                    authStore.clear()
+                    viewModel.requiresAuthentication = false
+                }
+            }
             .alert("Error", isPresented: Binding(get: { viewModel.errorText != nil }, set: { _ in viewModel.errorText = nil })) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -103,20 +110,31 @@ struct MyListView: View {
     private var tokenPrompt: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("AniList requires an access token to read and modify your list.")
+                Text("Connect AniTrack to AniList to persist your watch progress, scores, and dates.")
                     .foregroundStyle(.white)
-                Text("Paste a personal access token from https://anilist.co/settings/developer and we will keep it secure on this device.")
+                Text("Tap Sign In / Sign Up to open the AniList OAuth flow. The returned token stays on this device.")
                     .foregroundStyle(AniTrackTheme.mutedText)
                     .font(.callout)
-                TextField("Access Token", text: $tokenDraft)
-                    .textFieldStyle(.roundedBorder)
-                Button("Save Token") {
-                    let trimmed = tokenDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmed.isEmpty else { return }
-                    authStore.updateToken(trimmed)
-                    tokenDraft = ""
+                Button {
+                    startOAuthFlow()
+                } label: {
+                    HStack {
+                        Image(systemName: "person.crop.circle.badge.plus")
+                        Text(isAuthenticating ? "Authenticating…" : "Sign In / Sign Up")
+                    }
+                    .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .disabled(isAuthenticating)
+                if isAuthenticating {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                }
+                if let authError {
+                    Text(authError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
                 Link("Need help generating a token?", destination: URL(string: "https://anilist.co/settings/developer")!)
                     .font(.caption)
                     .foregroundStyle(AniTrackTheme.accent)
@@ -124,6 +142,30 @@ struct MyListView: View {
             .padding()
         }
         .background(AniTrackTheme.background.ignoresSafeArea())
+    }
+
+    private func startOAuthFlow() {
+        guard !isAuthenticating else { return }
+        isAuthenticating = true
+        authError = nil
+
+        Task {
+            do {
+                let response = try await AniListOAuthManager.shared.authorize()
+                await MainActor.run {
+                    authStore.updateToken(response.token, expiresIn: response.expiresIn)
+                }
+            } catch AniListOAuthError.userCancelled {
+                // user backed out; no change needed
+            } catch {
+                await MainActor.run {
+                    authError = error.localizedDescription
+                }
+            }
+            await MainActor.run {
+                isAuthenticating = false
+            }
+        }
     }
 
     private var list: some View {
