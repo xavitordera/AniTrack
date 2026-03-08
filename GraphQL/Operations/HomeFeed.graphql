@@ -1,0 +1,38 @@
+query HomeFeed($page: Int, $perPage: Int, $season: MediaSeason, $seasonYear: Int) {
+  trending: Page(page: $page, perPage: $perPage) {
+    media(type: ANIME, sort: TRENDING_DESC, isAdult: false) {
+      ...MediaCard
+    }
+  }
+  seasonPopular: Page(page: $page, perPage: $perPage) {
+    media(type: ANIME, sort: POPULARITY_DESC, season: $season, seasonYear: $seasonYear, isAdult: false) {
+      ...MediaCard
+    }
+  }
+  recommended: Page(page: 1, perPage: 12) {
+    media(type: ANIME, sort: SCORE_DESC, isAdult: false) {
+      ...MediaCard
+    }
+  }
+  airing: Page(page: 1, perPage: 8) {
+    media(type: ANIME, sort: POPULARITY_DESC, status: RELEASING, isAdult: false) {
+      ...MediaCard
+    }
+  }
+}
+
+fragment MediaCard on Media {
+  id
+  title {
+    romaji
+    english
+  }
+  description(asHtml: false)
+  episodes
+  averageScore
+  genres
+  bannerImage
+  coverImage {
+    large
+  }
+}

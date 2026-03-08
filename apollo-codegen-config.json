@@ -1,0 +1,27 @@
+{
+  "schemaNamespace": "AniTrackAPI",
+  "input": {
+    "operationSearchPaths": [
+      "GraphQL/Operations/**/*.graphql"
+    ],
+    "schemaSearchPaths": [
+      "GraphQL/schema.graphqls"
+    ]
+  },
+  "output": {
+    "testMocks": {
+      "none": {}
+    },
+    "schemaTypes": {
+      "path": "AniTrack/Generated",
+      "moduleType": {
+        "embeddedInTarget": {
+          "name": "AniTrack"
+        }
+      }
+    },
+    "operations": {
+      "inSchemaModule": {}
+    }
+  }
+}
