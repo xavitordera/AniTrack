@@ -428,6 +428,13 @@ private struct AdaptiveChipWrap<Item: Hashable, Content: View>: View {
 #Preview {
     DiscoverView(
         viewModel: DiscoverViewModel(repository: AniListAnimeRepository()),
-        makeDetailViewModel: { AnimeDetailViewModel(animeID: $0, repository: AniListAnimeRepository()) }
+        makeDetailViewModel: {
+            AnimeDetailViewModel(
+                animeID: $0,
+                repository: AniListAnimeRepository(),
+                listRepository: AniListListRepository(service: AniListGraphQLService(), authStore: AniListAuthStore()),
+                authStore: AniListAuthStore()
+            )
+        }
     )
 }

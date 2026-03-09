@@ -8,6 +8,7 @@ struct MyListView: View {
     @State private var showingBulkSheet = false
     @State private var isAuthenticating = false
     @State private var authError: String?
+    @State private var selectedFilter: ListFilter = .all
 
     init(viewModel: MyListViewModel, authStore: AniListAuthStore) {
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -24,25 +25,13 @@ struct MyListView: View {
                         .progressViewStyle(.circular)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(AniTrackTheme.background)
+                } else if viewModel.entries.isEmpty {
+                    emptyState
                 } else {
-                    list
+                    content
                 }
             }
-            .navigationTitle("My List")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: signOut) {
-                        Text(authStore.accessToken == nil ? "" : "Sign Out")
-                    }
-                    .disabled(authStore.accessToken == nil)
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: viewModel.toggleSelectionMode) {
-                        Text(viewModel.selectionMode ? "Done" : "Select")
-                    }
-                    .disabled(viewModel.entries.isEmpty)
-                }
                 if viewModel.selectionMode {
                     ToolbarItem(placement: .bottomBar) {
                         Button(action: { showingBulkSheet = true }) {
@@ -55,14 +44,15 @@ struct MyListView: View {
             }
             .refreshable { await viewModel.reload() }
             .onAppear { if authStore.accessToken != nil { Task { await viewModel.load() } } }
-            .onChange(of: authStore.accessToken) { token in
+            .onChange(of: authStore.accessToken) { _, token in
                 if token == nil {
                     viewModel.entries.removeAll()
+                    selectedFilter = .all
                 } else {
                     Task { await viewModel.load() }
                 }
             }
-            .onChange(of: viewModel.requiresAuthentication) { needsAuth in
+            .onChange(of: viewModel.requiresAuthentication) { _, needsAuth in
                 if needsAuth {
                     authStore.clear()
                     viewModel.requiresAuthentication = false
@@ -169,19 +159,13 @@ struct MyListView: View {
     }
 
     private var list: some View {
-        List {
-            if let viewer = viewModel.viewer {
-                Section("Signed in as") {
-                    HStack {
-                        Text(viewer.name ?? "AniList user")
-                            .foregroundStyle(.white)
-                    }
-                }
-            }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                header
+                filterStrip
 
-            ForEach(viewModel.groupedEntries, id: \.status) { group in
-                Section(header: Text(group.status.displayName)) {
-                    ForEach(group.entries) { entry in
+                LazyVStack(spacing: 14) {
+                    ForEach(displayedEntries) { entry in
                         MyListEntryRow(
                             entry: entry,
                             selectionMode: viewModel.selectionMode,
@@ -196,13 +180,181 @@ struct MyListView: View {
                     }
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 32)
         }
-        .listStyle(.insetGrouped)
         .background(AniTrackTheme.background)
+    }
+
+    private var content: some View {
+        ZStack {
+            AniTrackTheme.background.ignoresSafeArea()
+            list
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "bookmark.slash")
+                .font(.system(size: 30, weight: .semibold))
+                .foregroundStyle(AniTrackTheme.accent)
+            Text("Your AniList is empty")
+                .font(.headline)
+                .foregroundStyle(.white)
+            Text("Add an anime from its detail screen and it will appear here.")
+                .font(.subheadline)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(AniTrackTheme.mutedText)
+                .padding(.horizontal, 28)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AniTrackTheme.background)
+    }
+
+    private var header: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("My List")
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(.white)
+                if let viewer = viewModel.viewer {
+                    Text(viewer.name ?? "AniList user")
+                        .font(.caption)
+                        .foregroundStyle(AniTrackTheme.mutedText)
+                }
+            }
+
+            Spacer()
+
+            HStack(spacing: 10) {
+                Button(action: {}) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .frame(width: 36, height: 36)
+                        .background(AniTrackTheme.surface)
+                        .clipShape(Circle())
+                }
+
+                Menu {
+                    Button(viewModel.selectionMode ? "Done Selecting" : "Select Entries") {
+                        viewModel.toggleSelectionMode()
+                    }
+                    Button("Sign Out", role: .destructive, action: signOut)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .frame(width: 36, height: 36)
+                        .background(AniTrackTheme.surface)
+                        .clipShape(Circle())
+                }
+            }
+        }
+    }
+
+    private var filterStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(filters) { filter in
+                    Button {
+                        selectedFilter = filter
+                    } label: {
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(filter.color)
+                                .frame(width: 7, height: 7)
+                            Text(filter.label)
+                                .font(.caption.weight(.semibold))
+                            Text("\(count(for: filter))")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(selectedFilter == filter ? AniTrackTheme.surface : AniTrackTheme.card)
+                        )
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .stroke(selectedFilter == filter ? AniTrackTheme.accent.opacity(0.6) : .clear, lineWidth: 1)
+                        )
+                        .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var filters: [ListFilter] {
+        [.all] + MediaListStatus.allCases.map(ListFilter.status)
+    }
+
+    private var displayedEntries: [MediaListEntry] {
+        switch selectedFilter {
+        case .all:
+            return viewModel.entries
+        case .status(let status):
+            return viewModel.entries.filter { $0.status == status }
+        }
+    }
+
+    private func count(for filter: ListFilter) -> Int {
+        switch filter {
+        case .all:
+            return viewModel.entries.count
+        case .status(let status):
+            return viewModel.entries.filter { $0.status == status }.count
+        }
     }
 
     private func signOut() {
         authStore.clear()
+    }
+}
+
+private enum ListFilter: Hashable, Identifiable {
+    case all
+    case status(MediaListStatus)
+
+    var id: String {
+        switch self {
+        case .all:
+            return "all"
+        case .status(let status):
+            return status.rawValue
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .all:
+            return "All"
+        case .status(let status):
+            return status.displayName
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .all:
+            return AniTrackTheme.accent
+        case .status(.current):
+            return Color(red: 0.25, green: 0.62, blue: 0.98)
+        case .status(.completed):
+            return Color(red: 0.22, green: 0.78, blue: 0.45)
+        case .status(.planning):
+            return Color(red: 0.47, green: 0.29, blue: 0.96)
+        case .status(.onHold):
+            return Color(red: 0.93, green: 0.67, blue: 0.20)
+        case .status(.dropped):
+            return Color(red: 0.93, green: 0.38, blue: 0.32)
+        case .status(.repeating):
+            return Color(red: 0.86, green: 0.45, blue: 0.93)
+        }
     }
 }
 
@@ -217,67 +369,90 @@ private struct MyListEntryRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             if selectionMode {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(AniTrackTheme.accent)
-                    .font(.title2)
-                    .padding(.top, 6)
-                    .onTapGesture { onToggleSelection() }
+                Button(action: onToggleSelection) {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(AniTrackTheme.accent)
+                        .font(.title2)
+                        .padding(.top, 6)
+                }
+                .buttonStyle(.plain)
             }
 
             RemoteImageView(urlString: entry.media.coverImage, contentMode: .fill)
-                .frame(width: 56, height: 84)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .frame(width: 74, height: 108)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(AniTrackTheme.surface)
+                )
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(entry.media.title)
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                Text(entry.displaySubtitle)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.7))
-                if let progress = entry.progress {
-                    ProgressView(value: Double(progress), total: Double(max(entry.media.episodes ?? 1, 1)))
-                        .tint(AniTrackTheme.accent)
-                    if let total = entry.media.episodes, total > 0 {
-                        Text("\(progress) / \(total)")
-                            .font(.caption2)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(entry.media.title)
+                            .font(.headline.weight(.bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(2)
+
+                        Text(entry.displaySubtitle.isEmpty ? entry.status.displayName : entry.displaySubtitle)
+                            .font(.caption)
                             .foregroundStyle(AniTrackTheme.mutedText)
-                    } else {
-                        Text("\(progress) episodes tracked")
-                            .font(.caption2)
-                            .foregroundStyle(AniTrackTheme.mutedText)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 6)
+
+                    Menu {
+                        Button("Edit", action: onEdit)
+                        Button("Remove", role: .destructive, action: onDelete)
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .foregroundStyle(.white.opacity(0.6))
+                            .padding(6)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                HStack(spacing: 6) {
+                    ForEach(Array(entry.media.genres.prefix(3)), id: \.self) { genre in
+                        Text(genre)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.72))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(AniTrackTheme.surface)
+                            )
                     }
                 }
-                if let score = entry.score {
-                    Label(String(format: "%.1f", score), systemImage: "star.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.yellow)
-                }
-                if let start = entry.startedAt, !start.localizedDescription.isEmpty {
-                    Text("Started \(start.localizedDescription)")
-                        .font(.caption2)
+
+                HStack(spacing: 12) {
+                    Label(progressLabel, systemImage: "play.fill")
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(AniTrackTheme.mutedText)
+                    if let score = entry.score {
+                        Label(scoreLabel(score), systemImage: "star.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.yellow)
+                    }
                 }
-                if let complete = entry.completedAt, !complete.localizedDescription.isEmpty {
-                    Text("Completed \(complete.localizedDescription)")
-                        .font(.caption2)
-                        .foregroundStyle(AniTrackTheme.mutedText)
+
+                if let progress = entry.progress {
+                    ProgressView(value: Double(progress), total: Double(max(entry.media.episodes ?? max(progress, 1), 1)))
+                        .tint(AniTrackTheme.accent)
                 }
-            }
-            Spacer()
-            VStack(spacing: 6) {
-                Button(action: onEdit) {
-                    Label("Edit", systemImage: "pencil")
-                }
-                .buttonStyle(.bordered)
-                Button(role: .destructive, action: onDelete) {
-                    Label("Remove", systemImage: "trash")
-                }
-                .buttonStyle(.bordered)
             }
         }
-        .contentShape(Rectangle())
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(AniTrackTheme.card)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(.white.opacity(0.05), lineWidth: 1)
+        )
         .onTapGesture {
             if selectionMode {
                 onToggleSelection()
@@ -285,7 +460,23 @@ private struct MyListEntryRow: View {
                 onEdit()
             }
         }
-        .listRowBackground(AniTrackTheme.card)
+    }
+
+    private var progressLabel: String {
+        if let progress = entry.progress, let total = entry.media.episodes, total > 0 {
+            return "\(progress)/\(total)"
+        }
+        if let progress = entry.progress {
+            return "\(progress) eps"
+        }
+        return "No progress"
+    }
+
+    private func scoreLabel(_ score: Double) -> String {
+        if score.rounded(.towardZero) == score {
+            return String(Int(score))
+        }
+        return String(format: "%.1f", score)
     }
 }
 
