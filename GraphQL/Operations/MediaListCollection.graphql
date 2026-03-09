@@ -1,0 +1,37 @@
+query MediaListCollection($type: MediaType) {
+  collection: MediaListCollection(type: $type) {
+    lists {
+      name
+      isCustomList
+      entries {
+        id
+        status
+        score
+        progress
+        startedAt {
+          year
+          month
+          day
+        }
+        completedAt {
+          year
+          month
+          day
+        }
+        media {
+          id
+          episodes
+          title {
+            romaji
+            english
+            userPreferred
+          }
+          coverImage {
+            large
+            extraLarge
+          }
+        }
+      }
+    }
+  }
+}
