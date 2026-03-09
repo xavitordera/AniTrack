@@ -21,7 +21,10 @@ final class AniListOAuthManager: NSObject {
         let state = UUID().uuidString
         let codeVerifier = PKCE.generateVerifier()
         let codeChallenge = PKCE.challenge(for: codeVerifier)
-        let url = AniListOAuthConfig.authorizeURL(state: state, codeChallenge: codeChallenge)
+        let url = AniListOAuthConfig.authorizeURL(
+            state: state,
+            codeChallenge: AniListOAuthConfig.flow == .authorizationCodePKCE ? codeChallenge : nil
+        )
 
         return try await withCheckedThrowingContinuation { continuation in
             session = ASWebAuthenticationSession(
@@ -43,6 +46,11 @@ final class AniListOAuthManager: NSObject {
                     return
                 }
                 do {
+                    if AniListOAuthConfig.flow == .implicitToken {
+                        let token = try Self.extractToken(from: callbackURL, expectedState: state)
+                        continuation.resume(returning: token)
+                        return
+                    }
                     let (code, returnedState) = try Self.extractCode(from: callbackURL)
                     guard returnedState == state else {
                         throw AniListOAuthError.stateMismatch
@@ -89,6 +97,27 @@ final class AniListOAuthManager: NSObject {
             }
         }
         throw lastError ?? AniListOAuthError.other("Token exchange failed")
+    }
+
+    private static func extractToken(from url: URL, expectedState: String) throws -> AniListOAuthResponse {
+        guard let fragment = url.fragment else {
+            throw AniListOAuthError.missingToken
+        }
+        let pairs = fragment
+            .split(separator: "&")
+            .map { $0.split(separator: "=") }
+            .reduce(into: [String: String]()) { acc, pair in
+                guard pair.count == 2 else { return }
+                acc[String(pair[0])] = String(pair[1]).removingPercentEncoding
+            }
+        if let returnedState = pairs["state"], returnedState != expectedState {
+            throw AniListOAuthError.stateMismatch
+        }
+        guard let token = pairs["access_token"], !token.isEmpty else {
+            throw AniListOAuthError.missingToken
+        }
+        let expiresIn = pairs["expires_in"].flatMap(Int.init)
+        return AniListOAuthResponse(token: token, expiresIn: expiresIn, refreshToken: nil)
     }
 
     private func performTokenRequest(code: String, codeVerifier: String, includeSecret: Bool) async throws -> AniListOAuthResponse {
