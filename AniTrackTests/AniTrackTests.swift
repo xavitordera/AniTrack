@@ -543,6 +543,55 @@ final class AniTrackTests: XCTestCase {
         XCTAssertEqual(entry.status, .planning)
     }
 
+    func testStatsViewModelSkipsLoadWhenLoggedOut() async {
+        let service = MockStatsService(result: .success(makeStatsDashboard()))
+        let viewModel = StatsViewModel(service: service)
+
+        viewModel.syncAuthentication(isAuthenticated: false)
+        await viewModel.load()
+
+        XCTAssertNil(viewModel.dashboard)
+        XCTAssertEqual(service.fetchCount, 0)
+    }
+
+    func testStatsViewModelLoadsWhenAuthenticated() async {
+        let service = MockStatsService(result: .success(makeStatsDashboard()))
+        let viewModel = StatsViewModel(service: service)
+
+        viewModel.syncAuthentication(isAuthenticated: true)
+        await viewModel.load()
+
+        XCTAssertEqual(viewModel.dashboard?.overview.completedAnime, 12)
+        XCTAssertNil(viewModel.errorText)
+        XCTAssertGreaterThanOrEqual(service.fetchCount, 1)
+    }
+
+    func testStatsViewModelHandlesServiceFailure() async {
+        let service = MockStatsService(result: .failure(MockError.failed))
+        let viewModel = StatsViewModel(service: service)
+
+        viewModel.syncAuthentication(isAuthenticated: true)
+        await viewModel.load()
+
+        XCTAssertNil(viewModel.dashboard)
+        XCTAssertEqual(viewModel.errorText, "Unable to load your AniList stats right now.")
+    }
+
+    func testStatsViewModelResetsOnLogout() async {
+        let service = MockStatsService(result: .success(makeStatsDashboard()))
+        let viewModel = StatsViewModel(service: service)
+
+        viewModel.syncAuthentication(isAuthenticated: true)
+        await viewModel.load()
+
+        XCTAssertNotNil(viewModel.dashboard)
+
+        viewModel.syncAuthentication(isAuthenticated: false)
+
+        XCTAssertNil(viewModel.dashboard)
+        XCTAssertNil(viewModel.errorText)
+    }
+
     private func makeAnime(id: Int, title: String, subtitle: String, genres: [String]) -> AnimeMedia {
         AnimeMedia(
             id: id,
@@ -578,6 +627,27 @@ final class AniTrackTests: XCTestCase {
             bannerImage: nil,
             coverImage: nil,
             relations: []
+        )
+    }
+
+    private func makeStatsDashboard() -> StatsDashboard {
+        StatsDashboard(
+            userName: "xavi",
+            overview: StatsOverview(
+                completedAnime: 12,
+                episodesWatched: 144,
+                minutesWatched: 3_456,
+                averageScore: 81.4
+            ),
+            genres: [StatsCountItem(name: "Action", count: 20)],
+            studios: [StatsCountItem(name: "MAPPA", count: 8)],
+            statusBreakdown: [
+                StatsStatusItem(status: .current, count: 5),
+                StatsStatusItem(status: .completed, count: 12),
+                StatsStatusItem(status: .planning, count: 14),
+                StatsStatusItem(status: .dropped, count: 2),
+                StatsStatusItem(status: .onHold, count: 1)
+            ]
         )
     }
 
@@ -820,6 +890,20 @@ private final class MockListRepository: MyListRepository {
     }
 }
 
+private final class MockStatsService: StatsService {
+    private let result: Result<StatsDashboard, Error>
+    private(set) var fetchCount = 0
+
+    init(result: Result<StatsDashboard, Error>) {
+        self.result = result
+    }
+
+    func fetchAnimeStats() async throws -> StatsDashboard {
+        fetchCount += 1
+        return try result.get()
+    }
+}
+
 private final class MockGraphQLService: AniListGraphQLServing {
     var viewerData: AniTrackAPI.ViewerQuery.Data?
     var mediaListCollectionData: AniTrackAPI.MediaListCollectionQuery.Data?
@@ -866,6 +950,21 @@ private final class MockGraphQLService: AniListGraphQLServing {
         }
     }
 }
+
+private final class MockStatsService: StatsService {
+    private let result: Result<StatsDashboard, Error>
+    private(set) var fetchCount = 0
+
+    init(result: Result<StatsDashboard, Error>) {
+        self.result = result
+    }
+
+    func fetchAnimeStats() async throws -> StatsDashboard {
+        fetchCount += 1
+        return try result.get()
+    }
+}
+
 private final class MockReminderScheduler: ReminderScheduling {
     private let result: Result<Bool, Error>
     private(set) var lastAnimeID: Int?

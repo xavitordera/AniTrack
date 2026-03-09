@@ -48,6 +48,11 @@ extension AniTrackAPI {
       case "Studio": return AniTrackAPI.Objects.Studio
       case "StudioConnection": return AniTrackAPI.Objects.StudioConnection
       case "User": return AniTrackAPI.Objects.User
+      case "UserGenreStatistic": return AniTrackAPI.Objects.UserGenreStatistic
+      case "UserStatisticTypes": return AniTrackAPI.Objects.UserStatisticTypes
+      case "UserStatistics": return AniTrackAPI.Objects.UserStatistics
+      case "UserStatusStatistic": return AniTrackAPI.Objects.UserStatusStatistic
+      case "UserStudioStatistic": return AniTrackAPI.Objects.UserStudioStatistic
       default: return nil
       }
     }

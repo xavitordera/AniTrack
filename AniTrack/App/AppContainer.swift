@@ -5,6 +5,7 @@ final class AppContainer {
     let graphQLService: AniListGraphQLService
     let animeRepository: AnimeRepository
     let listRepository: MyListRepository
+    let statsService: StatsService
 
     init() {
         self.graphQLService = AniListGraphQLService(tokenProvider: { [weak authStore] in
@@ -12,5 +13,6 @@ final class AppContainer {
         })
         self.animeRepository = AniListAnimeRepository(service: graphQLService)
         self.listRepository = AniListListRepository(service: graphQLService, authStore: authStore)
+        self.statsService = AniListStatsService(service: graphQLService)
     }
 }
