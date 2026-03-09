@@ -25,19 +25,36 @@ AniTrack is a SwiftUI iOS app using MVVM and AniList GraphQL data.
 - `AniTrack/App`: app entry and container
 - `AniTrack/Presentation`: views and view models
 - `AniTrack/Domain`: entities and repository protocol
-- `AniTrack/Data`: AniList GraphQL service, queries, DTOs, repository
+- `AniTrack/Data`: AniList GraphQL service and repository
 - `GraphQL/Operations`: `.graphql` operations for Apollo codegen
 
-## Apollo + GraphQL notes
+## Apollo code generation workflow
 
-The app already includes `ApolloClient` initialization and an AniList GraphQL service. To switch fully to generated Apollo operation types:
+The project uses Apollo iOS codegen with configuration in `apollo-codegen-config.json`.
 
-1. Download AniList schema to `GraphQL/schema.graphqls`.
-2. Run Apollo iOS codegen using `apollo-codegen-config.json`.
-3. Replace raw query execution with generated `HomeFeedQuery` types.
+1. Ensure `apollo-ios-cli` is available at repo root.
+2. Refresh schema from AniList:
+
+```bash
+./apollo-ios-cli fetch-schema
+```
+
+3. Generate models and operations:
+
+```bash
+./apollo-ios-cli generate
+```
+
+4. Commit updated files:
+- `GraphQL/schema.graphqls`
+- `GraphQL/Operations/*.graphql` (if changed)
+- `AniTrack/Generated/**`
+
+Notes:
+- `GraphQL` is referenced in the Xcode project for easy editing.
+- `GraphQL/schema.graphqls` is not part of the app target build phases; it is an input for code generation only.
 
 ## AniList query reference used
 
 Based on media querying patterns documented at:
 - https://docs.anilist.co/guide/graphql/queries/media
-
