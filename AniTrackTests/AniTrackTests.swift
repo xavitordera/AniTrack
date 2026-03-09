@@ -236,6 +236,21 @@ final class AniTrackTests: XCTestCase {
         )
     }
 
+    private func makeListEntry(id: Int, title: String, status: MediaListStatus = .current) -> MediaListEntry {
+        let anime = makeAnime(id: id, title: title, subtitle: title, genres: ["Action"])
+        return MediaListEntry(
+            id: id,
+            media: anime,
+            status: status,
+            score: 80,
+            progress: 4,
+            startedAt: FuzzyDate(year: 2024, month: 10, day: 1),
+            completedAt: nil,
+            groupName: "Watching",
+            isCustomList: false
+        )
+    }
+
     private func makeDate(year: Int, month: Int, day: Int) -> Date {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
@@ -276,6 +291,50 @@ private struct MockAnimeRepository: AnimeRepository {
     }
 }
 
+private final class MockListRepository: MyListRepository {
+    private let viewerResult: AniListViewer?
+    private let entriesResult: [MediaListEntry]
+    private let saveResult: MediaListEntry?
+    private let bulkResult: [MediaListEntry]
+
+    init(
+        viewer: AniListViewer? = nil,
+        entries: [MediaListEntry] = [],
+        saveResult: MediaListEntry? = nil,
+        bulkResult: [MediaListEntry]? = nil
+    ) {
+        self.viewerResult = viewer
+        self.entriesResult = entries
+        self.saveResult = saveResult
+        self.bulkResult = bulkResult ?? entries
+    }
+
+    func fetchViewer() async throws -> AniListViewer {
+        guard let viewer = viewerResult else {
+            throw MockError.failed
+        }
+        return viewer
+    }
+
+    func fetchMyListEntries() async throws -> [MediaListEntry] {
+        entriesResult
+    }
+
+    func saveEntry(_ update: MediaListEntryPatch) async throws -> MediaListEntry {
+        guard let saveResult else {
+            throw MockError.failed
+        }
+        return saveResult
+    }
+
+    func deleteEntry(id: Int) async throws -> Bool {
+        true
+    }
+
+    func bulkSave(_ updates: [MediaListEntryPatch]) async throws -> [MediaListEntry] {
+        bulkResult
+    }
+}
 private final class MockReminderScheduler: ReminderScheduling {
     private let result: Result<Bool, Error>
     private(set) var lastAnimeID: Int?

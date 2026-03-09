@@ -25,10 +25,13 @@ struct RootTabView: View {
                     Label("Discover", systemImage: "safari.fill")
                 }
 
-            PlaceholderScreen(title: "My List", icon: "bookmark.fill")
-                .tabItem {
-                    Label("My List", systemImage: "bookmark.fill")
-                }
+            MyListView(
+                viewModel: MyListViewModel(repository: container.listRepository),
+                authStore: container.authStore
+            )
+            .tabItem {
+                Label("My List", systemImage: "bookmark.fill")
+            }
 
             PlaceholderScreen(title: "Stats", icon: "chart.bar.fill")
                 .tabItem {
