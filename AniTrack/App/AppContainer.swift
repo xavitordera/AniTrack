@@ -11,6 +11,6 @@ final class AppContainer {
             authStore?.accessToken
         })
         self.animeRepository = AniListAnimeRepository(service: graphQLService)
-        self.listRepository = AniListListRepository(service: graphQLService)
+        self.listRepository = AniListListRepository(service: graphQLService, authStore: authStore)
     }
 }

@@ -3,6 +3,8 @@ import Foundation
 struct AniListTokenRecord: Codable {
     let token: String
     let expiresAt: Date?
+    let viewerID: Int?
+    let viewerName: String?
 
     var isExpired: Bool {
         if let expiresAt {
@@ -17,6 +19,11 @@ final class AniListAuthStore: ObservableObject {
 
     var accessToken: String? {
         record?.token
+    }
+
+    var viewer: AniListViewer? {
+        guard let viewerID = record?.viewerID else { return nil }
+        return AniListViewer(id: viewerID, name: record?.viewerName)
     }
 
     var isAuthenticated: Bool {
@@ -36,7 +43,24 @@ final class AniListAuthStore: ObservableObject {
 
     func updateToken(_ token: String, expiresIn: Int?) {
         let expires = expiresIn.map { Date().addingTimeInterval(TimeInterval($0)) }
-        let newRecord = AniListTokenRecord(token: token, expiresAt: expires)
+        let newRecord = AniListTokenRecord(
+            token: token,
+            expiresAt: expires,
+            viewerID: record?.viewerID,
+            viewerName: record?.viewerName
+        )
+        record = newRecord
+        persist(record: newRecord)
+    }
+
+    func updateViewer(id: Int, name: String?) {
+        guard let currentRecord = record else { return }
+        let newRecord = AniListTokenRecord(
+            token: currentRecord.token,
+            expiresAt: currentRecord.expiresAt,
+            viewerID: id,
+            viewerName: name
+        )
         record = newRecord
         persist(record: newRecord)
     }

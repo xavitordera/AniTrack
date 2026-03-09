@@ -1,5 +1,5 @@
-query MediaListCollection($type: MediaType) {
-  collection: MediaListCollection(type: $type) {
+query MediaListCollection($userId: Int, $type: MediaType) {
+  collection: MediaListCollection(userId: $userId, type: $type) {
     lists {
       name
       isCustomList

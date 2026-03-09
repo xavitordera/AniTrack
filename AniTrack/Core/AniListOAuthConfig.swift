@@ -10,10 +10,10 @@ struct AniListOAuthConfig {
     static let flow: Flow = .authorizationCodePKCE
 
     /// Register your app at https://anilist.co/settings/developer and paste your client ID here.
-    static let clientID = "36956"
+    static let clientID = "37017"
 
     /// Client secret (optional for public clients when using PKCE). If AniList issued a secret for your app, you can add it here.
-    static let clientSecret: String? = "0BErvYv4J3VTWkXwnSJTHfRNDGd5agYLJeIhZHZp"
+    static let clientSecret: String? = "M11U3sHJZCgh5RFJ0mn0EMo4MBeqzhsJ0pKF8IH0"
 
     /// OAuth endpoints
     static let authorizeEndpoint = URL(string: "https://anilist.co/api/v2/oauth/authorize")!
