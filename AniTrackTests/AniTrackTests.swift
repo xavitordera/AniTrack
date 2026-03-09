@@ -180,6 +180,24 @@ final class AniTrackTests: XCTestCase {
         XCTAssertNil(viewModel.reminderMessage)
     }
 
+    func testDetailLoadsWhenNextAiringFails() async {
+        let detail = makeDetail(id: 42, title: "Frieren")
+        let viewModel = AnimeDetailViewModel(
+            animeID: detail.id,
+            repository: MockAnimeRepository(
+                result: .failure(MockError.failed),
+                detailHandler: { _ in detail },
+                nextAiringHandler: { _ in throw MockError.failed }
+            )
+        )
+
+        await viewModel.load()
+
+        XCTAssertEqual(viewModel.detail?.id, detail.id)
+        XCTAssertNil(viewModel.errorText)
+        XCTAssertNil(viewModel.nextAiring)
+    }
+
     private func makeAnime(id: Int, title: String, subtitle: String, genres: [String]) -> AnimeMedia {
         AnimeMedia(
             id: id,

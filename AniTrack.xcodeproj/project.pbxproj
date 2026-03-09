@@ -49,6 +49,11 @@
 			path = AniTrackUITests;
 			sourceTree = "<group>";
 		};
+		A1B2C3D42CE3D3050035DBB4 /* GraphQL */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = GraphQL;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -90,6 +95,7 @@
 				10DB5E8A2CE3D3030035DBB4 /* AniTrack */,
 				10DB5E9B2CE3D3050035DBB4 /* AniTrackTests */,
 				10DB5EA52CE3D3050035DBB4 /* AniTrackUITests */,
+				A1B2C3D42CE3D3050035DBB4 /* GraphQL */,
 				10C2DE9B2CE3D9BC0093D2CD /* Frameworks */,
 				10DB5E892CE3D3030035DBB4 /* Products */,
 			);

@@ -1,0 +1,30 @@
+query DiscoverAnime(
+  $page: Int = 1
+  $isAdult: Boolean = false
+  $search: String
+  $format: [MediaFormat]
+  $status: MediaStatus
+  $season: MediaSeason
+  $seasonYear: Int
+  $genres: [String]
+  $sort: [MediaSort] = [POPULARITY_DESC, SCORE_DESC]
+) {
+  Page(page: $page, perPage: 20) {
+    pageInfo {
+      hasNextPage
+    }
+    media(
+      type: ANIME
+      season: $season
+      format_in: $format
+      status: $status
+      search: $search
+      seasonYear: $seasonYear
+      genre_in: $genres
+      sort: $sort
+      isAdult: $isAdult
+    ) {
+      ...MediaCard
+    }
+  }
+}

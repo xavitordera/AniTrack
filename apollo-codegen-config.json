@@ -1,5 +1,20 @@
 {
   "schemaNamespace": "AniTrackAPI",
+  "schemaDownload": {
+    "downloadMethod": {
+      "introspection": {
+        "endpointURL": "https://graphql.anilist.co",
+        "httpMethod": {
+          "POST": {}
+        },
+        "includeDeprecatedInputValues": false,
+        "outputFormat": "SDL"
+      }
+    },
+    "downloadTimeout": 60,
+    "headers": [],
+    "outputPath": "GraphQL/schema.graphqls"
+  },
   "input": {
     "operationSearchPaths": [
       "GraphQL/Operations/**/*.graphql"

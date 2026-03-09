@@ -1,0 +1,6 @@
+query NextAiring($mediaId: Int) {
+  AiringSchedule(mediaId: $mediaId, notYetAired: true) {
+    episode
+    airingAt
+  }
+}
