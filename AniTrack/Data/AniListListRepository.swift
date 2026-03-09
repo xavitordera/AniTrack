@@ -3,9 +3,17 @@ import ApolloAPI
 
 final class AniListListRepository: MyListRepository {
     private let service: AniListGraphQLService
+    private let authStore: AniListAuthStore
+    private var cachedViewerID: Int?
 
-    init(service: AniListGraphQLService) {
+    init(service: AniListGraphQLService, authStore: AniListAuthStore) {
         self.service = service
+        self.authStore = authStore
+        self.cachedViewerID = authStore.viewer?.id
+    }
+
+    func cachedViewer() -> AniListViewer? {
+        authStore.viewer
     }
 
     func fetchViewer() async throws -> AniListViewer {
@@ -15,12 +23,18 @@ final class AniListListRepository: MyListRepository {
             throw AniListServiceError.emptyData
         }
 
+        cachedViewerID = viewer.id
+        authStore.updateViewer(id: viewer.id, name: viewer.name)
         return AniListViewer(id: viewer.id, name: viewer.name)
     }
 
     func fetchMyListEntries() async throws -> [MediaListEntry] {
+        let viewerID = try await resolveViewerID()
         let payload = try await service.fetch(
-            query: AniTrackAPI.MediaListCollectionQuery(type: .some(GraphQLEnum(.anime)))
+            query: AniTrackAPI.MediaListCollectionQuery(
+                userId: .some(viewerID),
+                type: .some(GraphQLEnum(.anime))
+            )
         )
 
         let entries = payload.collection?.lists?.flatMap { list in mapList(list) } ?? []
@@ -152,6 +166,21 @@ final class AniListListRepository: MyListRepository {
             groupName: nil,
             isCustomList: false
         )
+    }
+
+    private func resolveViewerID() async throws -> Int {
+        if let cachedViewerID {
+            return cachedViewerID
+        }
+
+        let payload = try await service.fetch(query: AniTrackAPI.ViewerQuery())
+        guard let viewer = payload.viewer else {
+            throw AniListServiceError.emptyData
+        }
+
+        cachedViewerID = viewer.id
+        authStore.updateViewer(id: viewer.id, name: viewer.name)
+        return viewer.id
     }
 
     private func fuzzyDate(year: Int?, month: Int?, day: Int?) -> FuzzyDate? {

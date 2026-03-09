@@ -8,16 +8,24 @@ extension AniTrackAPI {
     static let operationName: String = "MediaListCollection"
     static let operationDocument: ApolloAPI.OperationDocument = .init(
       definition: .init(
-        #"query MediaListCollection($type: MediaType) { collection: MediaListCollection(type: $type) { __typename lists { __typename name isCustomList entries { __typename id status score progress startedAt { __typename year month day } completedAt { __typename year month day } media { __typename id episodes title { __typename romaji english userPreferred } coverImage { __typename large extraLarge } } } } } }"#
+        #"query MediaListCollection($userId: Int, $type: MediaType) { collection: MediaListCollection(userId: $userId, type: $type) { __typename lists { __typename name isCustomList entries { __typename id status score progress startedAt { __typename year month day } completedAt { __typename year month day } media { __typename id episodes title { __typename romaji english userPreferred } coverImage { __typename large extraLarge } } } } } }"#
       ))
 
+    public var userId: GraphQLNullable<Int>
     public var type: GraphQLNullable<GraphQLEnum<MediaType>>
 
-    public init(type: GraphQLNullable<GraphQLEnum<MediaType>>) {
+    public init(
+      userId: GraphQLNullable<Int>,
+      type: GraphQLNullable<GraphQLEnum<MediaType>>
+    ) {
+      self.userId = userId
       self.type = type
     }
 
-    public var __variables: Variables? { ["type": type] }
+    public var __variables: Variables? { [
+      "userId": userId,
+      "type": type
+    ] }
 
     struct Data: AniTrackAPI.SelectionSet {
       let __data: DataDict
@@ -25,7 +33,10 @@ extension AniTrackAPI {
 
       static var __parentType: any ApolloAPI.ParentType { AniTrackAPI.Objects.Query }
       static var __selections: [ApolloAPI.Selection] { [
-        .field("MediaListCollection", alias: "collection", Collection?.self, arguments: ["type": .variable("type")]),
+        .field("MediaListCollection", alias: "collection", Collection?.self, arguments: [
+          "userId": .variable("userId"),
+          "type": .variable("type")
+        ]),
       ] }
       static var __fulfilledFragments: [any ApolloAPI.SelectionSet.Type] { [
         MediaListCollectionQuery.Data.self

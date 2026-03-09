@@ -34,7 +34,11 @@ final class MyListViewModel: ObservableObject {
         requiresAuthentication = false
 
         do {
-            viewer = try await repository.fetchViewer()
+            if let cachedViewer = repository.cachedViewer() {
+                viewer = cachedViewer
+            } else {
+                viewer = try await repository.fetchViewer()
+            }
             entries = try await repository.fetchMyListEntries()
         } catch {
             handle(error: error, fallbackMessage: "Unable to load your list right now.")

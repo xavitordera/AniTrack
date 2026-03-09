@@ -27,52 +27,59 @@ final class AniListOAuthManager: NSObject {
         )
 
         return try await withCheckedThrowingContinuation { continuation in
-            session = ASWebAuthenticationSession(
-                url: url,
-                callbackURLScheme: AniListOAuthConfig.redirectScheme
-            ) { [weak self] callbackURL, error in
-                defer { self?.session = nil }
+            Task { @MainActor [weak self] in
+                guard let self else {
+                    continuation.resume(throwing: AniListOAuthError.other("OAuth session was interrupted."))
+                    return
+                }
 
-                if let error = error as? ASWebAuthenticationSessionError, error.code == .canceledLogin {
-                    continuation.resume(throwing: AniListOAuthError.userCancelled)
-                    return
-                }
-                if let error = error {
-                    continuation.resume(throwing: AniListOAuthError.other(error.localizedDescription))
-                    return
-                }
-                guard let callbackURL = callbackURL else {
-                    continuation.resume(throwing: AniListOAuthError.missingToken)
-                    return
-                }
-                do {
-                    if AniListOAuthConfig.flow == .implicitToken {
-                        let token = try Self.extractToken(from: callbackURL, expectedState: state)
-                        continuation.resume(returning: token)
+                session = ASWebAuthenticationSession(
+                    url: url,
+                    callbackURLScheme: AniListOAuthConfig.redirectScheme
+                ) { [weak self] callbackURL, error in
+                    defer { self?.session = nil }
+
+                    if let error = error as? ASWebAuthenticationSessionError, error.code == .canceledLogin {
+                        continuation.resume(throwing: AniListOAuthError.userCancelled)
                         return
                     }
-                    let (code, returnedState) = try Self.extractCode(from: callbackURL)
-                    guard returnedState == state else {
-                        throw AniListOAuthError.stateMismatch
+                    if let error = error {
+                        continuation.resume(throwing: AniListOAuthError.other(error.localizedDescription))
+                        return
                     }
-                    guard let strongSelf = self else {
-                        throw AniListOAuthError.other("OAuth session was interrupted.")
+                    guard let callbackURL = callbackURL else {
+                        continuation.resume(throwing: AniListOAuthError.missingToken)
+                        return
                     }
-                    Task {
-                        do {
-                            let response = try await strongSelf.exchangeCode(code: code, codeVerifier: codeVerifier)
-                            continuation.resume(returning: response)
-                        } catch {
-                            continuation.resume(throwing: error)
+                    do {
+                        if AniListOAuthConfig.flow == .implicitToken {
+                            let token = try Self.extractToken(from: callbackURL, expectedState: state)
+                            continuation.resume(returning: token)
+                            return
                         }
+                        let (code, returnedState) = try Self.extractCode(from: callbackURL)
+                        guard returnedState == state else {
+                            throw AniListOAuthError.stateMismatch
+                        }
+                        guard let strongSelf = self else {
+                            throw AniListOAuthError.other("OAuth session was interrupted.")
+                        }
+                        Task {
+                            do {
+                                let response = try await strongSelf.exchangeCode(code: code, codeVerifier: codeVerifier)
+                                continuation.resume(returning: response)
+                            } catch {
+                                continuation.resume(throwing: error)
+                            }
+                        }
+                    } catch {
+                        continuation.resume(throwing: error)
                     }
-                } catch {
-                    continuation.resume(throwing: error)
                 }
+                session?.presentationContextProvider = self
+                session?.prefersEphemeralWebBrowserSession = true
+                session?.start()
             }
-            session?.presentationContextProvider = self
-            session?.prefersEphemeralWebBrowserSession = true
-            session?.start()
         }
     }
 
@@ -181,6 +188,7 @@ final class AniListOAuthManager: NSObject {
 }
 
 extension AniListOAuthManager: ASWebAuthenticationPresentationContextProviding {
+    @MainActor
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
