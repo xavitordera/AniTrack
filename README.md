@@ -28,6 +28,28 @@ AniTrack is a SwiftUI iOS app using MVVM and AniList GraphQL data.
 - `AniTrack/Data`: AniList GraphQL service and repository
 - `GraphQL/Operations`: `.graphql` operations for Apollo codegen
 
+## Sourcery mock generation workflow
+
+The test target now uses Sourcery to generate the shared mocks used by the unit tests.
+
+- Annotated protocols live in:
+  - `AniTrack/Domain/AnimeRepository.swift`
+  - `AniTrack/Domain/MyListRepository.swift`
+  - `AniTrack/Core/LocalNotificationScheduler.swift`
+- Sourcery config lives at `AniTrackTests/.sourcery.yml`
+- Sourcery template lives at `AniTrackTests/Sourcery/Templates/AutoMockable.stencil`
+- Generated mocks are committed at `AniTrackTests/Generated/AutoMockable.generated.swift`
+
+Regenerate mocks after changing an annotated protocol:
+
+1. Open the project in Xcode.
+2. Run the Sourcery command plugin for the `AniTrackTests` target.
+3. Commit the updated `AniTrackTests/Generated/AutoMockable.generated.swift`.
+
+Notes:
+- The generic `AniListGraphQLServing` protocol is intentionally still hand-mocked in tests. It is a poor fit for the current mock template because its API is generic over GraphQL operation types.
+- The generated mocks intentionally preserve the existing test helper names (`MockAnimeRepository`, `MockListRepository`, `MockReminderScheduler`) so test code stays stable while the source of truth moves to Sourcery.
+
 ## Apollo code generation workflow
 
 The project uses Apollo iOS codegen with configuration in `apollo-codegen-config.json`.

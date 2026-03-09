@@ -6,6 +6,7 @@ enum ReminderScheduleError: Error {
     case noFutureDate
 }
 
+// sourcery: AutoMockable
 protocol ReminderScheduling {
     /// Returns true when a reminder for the same episode already exists.
     func scheduleAiringReminder(animeID: Int, animeTitle: String, episode: Int, airingAt: Date) async throws -> Bool

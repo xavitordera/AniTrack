@@ -1,5 +1,6 @@
 import Foundation
 
+// sourcery: AutoMockable
 protocol MyListRepository {
     func cachedViewer() -> AniListViewer?
     func fetchViewer() async throws -> AniListViewer

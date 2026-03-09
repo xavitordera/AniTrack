@@ -1,5 +1,6 @@
 import Foundation
 
+// sourcery: AutoMockable
 protocol AnimeRepository {
     func fetchHomeFeed() async throws -> HomeFeed
     func fetchAnimeDetail(id: Int) async throws -> AnimeDetail
