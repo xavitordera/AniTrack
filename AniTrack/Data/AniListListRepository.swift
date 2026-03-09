@@ -2,11 +2,11 @@ import Foundation
 import ApolloAPI
 
 final class AniListListRepository: MyListRepository {
-    private let service: AniListGraphQLService
+    private let service: any AniListGraphQLServing
     private let authStore: AniListAuthStore
     private var cachedViewerID: Int?
 
-    init(service: AniListGraphQLService, authStore: AniListAuthStore) {
+    init(service: any AniListGraphQLServing, authStore: AniListAuthStore) {
         self.service = service
         self.authStore = authStore
         self.cachedViewerID = authStore.viewer?.id
@@ -17,7 +17,10 @@ final class AniListListRepository: MyListRepository {
     }
 
     func fetchViewer() async throws -> AniListViewer {
-        let payload = try await service.fetch(query: AniTrackAPI.ViewerQuery())
+        let payload = try await service.fetch(
+            query: AniTrackAPI.ViewerQuery(),
+            cachePolicy: .fetchIgnoringCacheCompletely
+        )
 
         guard let viewer = payload.viewer else {
             throw AniListServiceError.emptyData
@@ -28,13 +31,28 @@ final class AniListListRepository: MyListRepository {
         return AniListViewer(id: viewer.id, name: viewer.name)
     }
 
+    func fetchEntry(mediaID: Int) async throws -> MediaListEntry? {
+        let viewerID = try await resolveViewerID()
+        let payload = try await service.fetch(
+            query: AniTrackAPI.MediaListEntryQuery(
+                userId: .some(viewerID),
+                mediaId: .some(mediaID),
+                type: .some(GraphQLEnum(.anime))
+            ),
+            cachePolicy: .fetchIgnoringCacheCompletely
+        )
+
+        return payload.entry.flatMap(mapEntry)
+    }
+
     func fetchMyListEntries() async throws -> [MediaListEntry] {
         let viewerID = try await resolveViewerID()
         let payload = try await service.fetch(
             query: AniTrackAPI.MediaListCollectionQuery(
                 userId: .some(viewerID),
                 type: .some(GraphQLEnum(.anime))
-            )
+            ),
+            cachePolicy: .fetchIgnoringCacheCompletely
         )
 
         let entries = payload.collection?.lists?.flatMap { list in mapList(list) } ?? []
@@ -52,19 +70,25 @@ final class AniListListRepository: MyListRepository {
                 progress: nullable(update.progress),
                 startedAt: nullable(inputDate(from: update.startedAt)),
                 completedAt: nullable(inputDate(from: update.completedAt))
-            )
+            ),
+            publishResultToStore: false
         )
 
-        guard let entry = payload.saved.flatMap({ mapSavedEntry($0) }) else {
-            throw AniListServiceError.emptyData
+        if let entry = payload.saved.flatMap({ mapSavedEntry($0) }) {
+            return entry
         }
 
-        return entry
+        if let refetchedEntry = try await fetchEntry(mediaID: update.mediaId) {
+            return refetchedEntry
+        }
+
+        throw AniListServiceError.emptyData
     }
 
     func deleteEntry(id: Int) async throws -> Bool {
         let payload = try await service.perform(
-            mutation: AniTrackAPI.DeleteMediaListEntryMutation(id: .some(id))
+            mutation: AniTrackAPI.DeleteMediaListEntryMutation(id: .some(id)),
+            publishResultToStore: false
         )
 
         return payload.result?.deleted ?? false
@@ -88,6 +112,34 @@ final class AniListListRepository: MyListRepository {
         return (list.entries ?? []).compactMap { mapEntry($0, groupName: groupName, isCustomList: isCustom) }
     }
 
+    private func mapEntry(_ dto: AniTrackAPI.MediaListEntryQuery.Data.Entry) -> MediaListEntry? {
+        guard let status = mapStatus(dto.status), let mediaDTO = dto.media else {
+            return nil
+        }
+
+        let media = makeMedia(
+            id: mediaDTO.id,
+            episodes: mediaDTO.episodes,
+            romaji: mediaDTO.title?.romaji,
+            english: mediaDTO.title?.english,
+            preferred: mediaDTO.title?.userPreferred,
+            coverLarge: mediaDTO.coverImage?.large,
+            coverExtraLarge: mediaDTO.coverImage?.extraLarge
+        )
+
+        return MediaListEntry(
+            id: dto.id,
+            media: media,
+            status: status,
+            score: dto.score,
+            progress: dto.progress,
+            startedAt: fuzzyDate(year: dto.startedAt?.year, month: dto.startedAt?.month, day: dto.startedAt?.day),
+            completedAt: fuzzyDate(year: dto.completedAt?.year, month: dto.completedAt?.month, day: dto.completedAt?.day),
+            groupName: nil,
+            isCustomList: false
+        )
+    }
+
     private func mapEntry(
         _ dto: AniTrackAPI.MediaListCollectionQuery.Data.Collection.List.Entry?,
         groupName: String?,
@@ -101,22 +153,14 @@ final class AniListListRepository: MyListRepository {
             return nil
         }
 
-        let mediaTitle = resolveTitle(
+        let media = makeMedia(
+            id: mediaDTO.id,
+            episodes: mediaDTO.episodes,
             romaji: mediaDTO.title?.romaji,
             english: mediaDTO.title?.english,
-            fallback: mediaDTO.title?.userPreferred ?? "Unknown Title"
-        )
-        let subtitle = mediaDTO.title?.userPreferred ?? mediaDTO.title?.romaji ?? ""
-        let media = AnimeMedia(
-            id: mediaDTO.id,
-            title: mediaTitle,
-            subtitle: subtitle,
-            description: "",
-            genres: [],
-            score: nil,
-            episodes: mediaDTO.episodes,
-            bannerImage: nil,
-            coverImage: mediaDTO.coverImage?.extraLarge ?? mediaDTO.coverImage?.large
+            preferred: mediaDTO.title?.userPreferred,
+            coverLarge: mediaDTO.coverImage?.large,
+            coverExtraLarge: mediaDTO.coverImage?.extraLarge
         )
 
         return MediaListEntry(
@@ -137,22 +181,14 @@ final class AniListListRepository: MyListRepository {
             return nil
         }
 
-        let mediaTitle = resolveTitle(
+        let media = makeMedia(
+            id: mediaDTO.id,
+            episodes: mediaDTO.episodes,
             romaji: mediaDTO.title?.romaji,
             english: mediaDTO.title?.english,
-            fallback: mediaDTO.title?.userPreferred ?? "Unknown Title"
-        )
-        let subtitle = mediaDTO.title?.userPreferred ?? mediaDTO.title?.romaji ?? ""
-        let media = AnimeMedia(
-            id: mediaDTO.id,
-            title: mediaTitle,
-            subtitle: subtitle,
-            description: "",
-            genres: [],
-            score: nil,
-            episodes: mediaDTO.episodes,
-            bannerImage: nil,
-            coverImage: mediaDTO.coverImage?.extraLarge ?? mediaDTO.coverImage?.large
+            preferred: mediaDTO.title?.userPreferred,
+            coverLarge: mediaDTO.coverImage?.large,
+            coverExtraLarge: mediaDTO.coverImage?.extraLarge
         )
 
         return MediaListEntry(
@@ -173,7 +209,10 @@ final class AniListListRepository: MyListRepository {
             return cachedViewerID
         }
 
-        let payload = try await service.fetch(query: AniTrackAPI.ViewerQuery())
+        let payload = try await service.fetch(
+            query: AniTrackAPI.ViewerQuery(),
+            cachePolicy: .fetchIgnoringCacheCompletely
+        )
         guard let viewer = payload.viewer else {
             throw AniListServiceError.emptyData
         }
@@ -186,6 +225,35 @@ final class AniListListRepository: MyListRepository {
     private func fuzzyDate(year: Int?, month: Int?, day: Int?) -> FuzzyDate? {
         guard year != nil || month != nil || day != nil else { return nil }
         return FuzzyDate(year: year, month: month, day: day)
+    }
+
+    private func makeMedia(
+        id: Int,
+        episodes: Int?,
+        romaji: String?,
+        english: String?,
+        preferred: String?,
+        coverLarge: String?,
+        coverExtraLarge: String?
+    ) -> AnimeMedia {
+        let mediaTitle = resolveTitle(
+            romaji: romaji,
+            english: english,
+            fallback: preferred ?? "Unknown Title"
+        )
+        let subtitle = preferred ?? romaji ?? ""
+
+        return AnimeMedia(
+            id: id,
+            title: mediaTitle,
+            subtitle: subtitle,
+            description: "",
+            genres: [],
+            score: nil,
+            episodes: episodes,
+            bannerImage: nil,
+            coverImage: coverExtraLarge ?? coverLarge
+        )
     }
 
     private func inputDate(from fuzzy: FuzzyDateInput?) -> AniTrackAPI.FuzzyDateInput? {

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AniTrackHomeView: View {
     @StateObject private var viewModel: HomeViewModel
+    @State private var selectedDetailID: SelectedAnime?
     private let makeDetailViewModel: (Int) -> AnimeDetailViewModel
 
     init(viewModel: HomeViewModel, makeDetailViewModel: @escaping (Int) -> AnimeDetailViewModel) {
@@ -71,6 +72,9 @@ struct AniTrackHomeView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(viewModel.errorText ?? "")
+            }
+            .navigationDestination(item: $selectedDetailID) { selection in
+                detailDestination(animeID: selection.id)
             }
         }
     }
@@ -220,12 +224,18 @@ struct AniTrackHomeView: View {
     private func featuredSection(contentWidth: CGFloat) -> some View {
         Group {
             if let featured = viewModel.featured {
-                NavigationLink {
-                    detailDestination(animeID: featured.id)
-                } label: {
-                    FeaturedBannerCard(anime: featured, height: heroHeight(contentWidth: contentWidth))
-                }
-                .buttonStyle(.plain)
+                FeaturedBannerCard(
+                    anime: featured,
+                    isTracked: viewModel.isTracked(featured.id),
+                    isUpdatingTrackedState: viewModel.isUpdating(featured.id),
+                    onWatch: {
+                        selectedDetailID = SelectedAnime(id: featured.id)
+                    },
+                    onToggleList: {
+                        Task { await viewModel.toggleTracked(for: featured) }
+                    },
+                    height: heroHeight(contentWidth: contentWidth)
+                )
             } else {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(AniTrackTheme.card.opacity(0.65))
@@ -357,9 +367,24 @@ struct AniTrackHomeView: View {
     }
 }
 
+private struct SelectedAnime: Identifiable, Hashable {
+    let id: Int
+}
+
 #Preview {
     AniTrackHomeView(
-        viewModel: HomeViewModel(repository: AniListAnimeRepository()),
-        makeDetailViewModel: { AnimeDetailViewModel(animeID: $0, repository: AniListAnimeRepository()) }
+        viewModel: HomeViewModel(
+            repository: AniListAnimeRepository(),
+            listRepository: AniListListRepository(service: AniListGraphQLService(), authStore: AniListAuthStore()),
+            authStore: AniListAuthStore()
+        ),
+        makeDetailViewModel: {
+            AnimeDetailViewModel(
+                animeID: $0,
+                repository: AniListAnimeRepository(),
+                listRepository: AniListListRepository(service: AniListGraphQLService(), authStore: AniListAuthStore()),
+                authStore: AniListAuthStore()
+            )
+        }
     )
 }

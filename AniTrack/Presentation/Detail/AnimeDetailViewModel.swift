@@ -10,19 +10,27 @@ final class AnimeDetailViewModel: ObservableObject {
     @Published var reminderMessage: String?
     @Published var isSchedulingReminder = false
     @Published var isTracked = false
+    @Published var isUpdatingList = false
 
     private let animeID: Int
     private let repository: AnimeRepository
+    private let listRepository: MyListRepository
+    private let authStore: AniListAuthStore
     private let reminderScheduler: ReminderScheduling
     private var countdownTask: Task<Void, Never>?
+    private var currentListEntry: MediaListEntry?
 
     init(
         animeID: Int,
         repository: AnimeRepository,
+        listRepository: MyListRepository,
+        authStore: AniListAuthStore,
         reminderScheduler: ReminderScheduling = LocalNotificationScheduler()
     ) {
         self.animeID = animeID
         self.repository = repository
+        self.listRepository = listRepository
+        self.authStore = authStore
         self.reminderScheduler = reminderScheduler
     }
 
@@ -44,13 +52,50 @@ final class AnimeDetailViewModel: ObservableObject {
         } catch {
             nextAiring = nil
         }
+
+        await refreshTrackedState()
         startCountdownIfNeeded()
 
         isLoading = false
     }
 
-    func toggleTracked() {
-        isTracked.toggle()
+    func toggleTracked() async {
+        guard authStore.accessToken != nil else {
+            errorText = "Sign in to AniList to save shows to your list."
+            return
+        }
+
+        isUpdatingList = true
+        defer { isUpdatingList = false }
+
+        do {
+            if let currentListEntry {
+                let deleted = try await listRepository.deleteEntry(id: currentListEntry.id)
+                if deleted {
+                    self.currentListEntry = nil
+                    isTracked = false
+                    reminderMessage = nil
+                }
+            } else {
+                var patch = MediaListEntryPatch(mediaId: animeID)
+                patch.status = .planning
+                let entry = try await listRepository.saveEntry(patch)
+                self.currentListEntry = entry
+                isTracked = true
+                reminderMessage = "Added to My List."
+            }
+        } catch {
+            if let serviceError = error as? AniListServiceError {
+                switch serviceError {
+                case .unauthorized:
+                    errorText = "Your AniList session expired. Please sign in again."
+                default:
+                    errorText = "Couldn't update your list right now."
+                }
+            } else {
+                errorText = "Couldn't update your list right now."
+            }
+        }
     }
 
     func scheduleReminderForNextEpisode() async {
@@ -96,6 +141,22 @@ final class AnimeDetailViewModel: ObservableObject {
                 countdownText = Self.countdownString(until: nextAiring.airingAt)
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
+        }
+    }
+
+    private func refreshTrackedState() async {
+        guard authStore.accessToken != nil else {
+            currentListEntry = nil
+            isTracked = false
+            return
+        }
+
+        do {
+            currentListEntry = try await listRepository.fetchEntry(mediaID: animeID)
+            isTracked = currentListEntry != nil
+        } catch {
+            currentListEntry = nil
+            isTracked = false
         }
     }
 

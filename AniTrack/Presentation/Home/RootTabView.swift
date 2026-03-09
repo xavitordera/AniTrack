@@ -6,9 +6,18 @@ struct RootTabView: View {
     var body: some View {
         TabView {
             AniTrackHomeView(
-                viewModel: HomeViewModel(repository: container.animeRepository),
+                viewModel: HomeViewModel(
+                    repository: container.animeRepository,
+                    listRepository: container.listRepository,
+                    authStore: container.authStore
+                ),
                 makeDetailViewModel: { animeID in
-                    AnimeDetailViewModel(animeID: animeID, repository: container.animeRepository)
+                    AnimeDetailViewModel(
+                        animeID: animeID,
+                        repository: container.animeRepository,
+                        listRepository: container.listRepository,
+                        authStore: container.authStore
+                    )
                 }
             )
                 .tabItem {
@@ -18,7 +27,12 @@ struct RootTabView: View {
             DiscoverView(
                 viewModel: DiscoverViewModel(repository: container.animeRepository),
                 makeDetailViewModel: { animeID in
-                    AnimeDetailViewModel(animeID: animeID, repository: container.animeRepository)
+                    AnimeDetailViewModel(
+                        animeID: animeID,
+                        repository: container.animeRepository,
+                        listRepository: container.listRepository,
+                        authStore: container.authStore
+                    )
                 }
             )
                 .tabItem {

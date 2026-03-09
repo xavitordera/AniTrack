@@ -50,11 +50,17 @@ struct AnimeDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    viewModel.toggleTracked()
+                    Task { await viewModel.toggleTracked() }
                 } label: {
-                    Image(systemName: viewModel.isTracked ? "bookmark.fill" : "bookmark")
-                        .foregroundStyle(viewModel.isTracked ? AniTrackTheme.accent : .white)
+                    if viewModel.isUpdatingList {
+                        ProgressView()
+                            .tint(AniTrackTheme.accent)
+                    } else {
+                        Image(systemName: viewModel.isTracked ? "bookmark.fill" : "bookmark")
+                            .foregroundStyle(viewModel.isTracked ? AniTrackTheme.accent : .white)
+                    }
                 }
+                .disabled(viewModel.isUpdatingList)
             }
         }
         .task {
@@ -138,14 +144,15 @@ struct AnimeDetailView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             Button("Add To List") {
-                viewModel.toggleTracked()
+                Task { await viewModel.toggleTracked() }
             }
             .font(.subheadline.weight(.bold))
             .padding(.vertical, 10)
             .frame(maxWidth: .infinity)
-            .background(AniTrackTheme.surface)
-            .foregroundStyle(.white)
+            .background(viewModel.isTracked ? AniTrackTheme.accent : AniTrackTheme.surface)
+            .foregroundStyle(viewModel.isTracked ? .black : .white)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .disabled(viewModel.isUpdatingList)
         }
         .padding(.horizontal, 16)
     }
@@ -398,7 +405,19 @@ extension AnimeDetailView {
 
 #Preview {
     AnimeDetailView(
-        viewModel: AnimeDetailViewModel(animeID: 1, repository: AniListAnimeRepository()),
-        makeDetailViewModel: { AnimeDetailViewModel(animeID: $0, repository: AniListAnimeRepository()) }
+        viewModel: AnimeDetailViewModel(
+            animeID: 1,
+            repository: AniListAnimeRepository(),
+            listRepository: AniListListRepository(service: AniListGraphQLService(), authStore: AniListAuthStore()),
+            authStore: AniListAuthStore()
+        ),
+        makeDetailViewModel: {
+            AnimeDetailViewModel(
+                animeID: $0,
+                repository: AniListAnimeRepository(),
+                listRepository: AniListListRepository(service: AniListGraphQLService(), authStore: AniListAuthStore()),
+                authStore: AniListAuthStore()
+            )
+        }
     )
 }

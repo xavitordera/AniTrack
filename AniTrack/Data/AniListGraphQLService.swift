@@ -9,6 +9,18 @@ enum AniListServiceError: Error {
     case unauthorized
 }
 
+protocol AniListGraphQLServing {
+    func fetch<Query: GraphQLQuery>(
+        query: Query,
+        cachePolicy: CachePolicy
+    ) async throws -> Query.Data
+
+    func perform<Mutation: GraphQLMutation>(
+        mutation: Mutation,
+        publishResultToStore: Bool
+    ) async throws -> Mutation.Data
+}
+
 private final class AniListAuthorizationInterceptor: ApolloInterceptor {
     let id = UUID().uuidString
 
@@ -67,7 +79,7 @@ private final class AniListInterceptorProvider: InterceptorProvider {
     }
 }
 
-final class AniListGraphQLService {
+final class AniListGraphQLService: AniListGraphQLServing {
     private let endpoint = "https://graphql.anilist.co"
     private let logger = Logger(subsystem: "com.xavitordera.anitrack", category: "network")
 

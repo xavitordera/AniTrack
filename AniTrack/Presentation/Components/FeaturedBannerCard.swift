@@ -2,6 +2,10 @@ import SwiftUI
 
 struct FeaturedBannerCard: View {
     let anime: AnimeMedia
+    let isTracked: Bool
+    let isUpdatingTrackedState: Bool
+    let onWatch: () -> Void
+    let onToggleList: () -> Void
     var height: CGFloat = 205
 
     var body: some View {
@@ -49,7 +53,7 @@ struct FeaturedBannerCard: View {
 
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 10) {
-                        Button("Watch") { }
+                        Button("Watch", action: onWatch)
                             .font(.caption.weight(.bold))
                             .padding(.vertical, 8)
                             .frame(maxWidth: .infinity)
@@ -57,17 +61,29 @@ struct FeaturedBannerCard: View {
                             .foregroundStyle(.black)
                             .clipShape(Capsule())
 
-                        Button("+ List") { }
+                        Button(action: onToggleList) {
+                            HStack(spacing: 6) {
+                                if isUpdatingTrackedState {
+                                    ProgressView()
+                                        .tint(isTracked ? .black : .white)
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: isTracked ? "checkmark.circle.fill" : "plus.circle")
+                                }
+                                Text(isTracked ? "In List" : "Add To List")
+                            }
                             .font(.caption.weight(.semibold))
-                            .padding(.vertical, 8)
                             .frame(maxWidth: .infinity)
-                            .background(Color.white.opacity(0.15))
-                            .foregroundStyle(.white)
+                        }
+                            .padding(.vertical, 8)
+                            .background(isTracked ? AniTrackTheme.accent : Color.white.opacity(0.15))
+                            .foregroundStyle(isTracked ? .black : .white)
                             .clipShape(Capsule())
+                            .disabled(isUpdatingTrackedState)
                     }
 
                     VStack(spacing: 8) {
-                        Button("Watch") { }
+                        Button("Watch", action: onWatch)
                             .font(.caption.weight(.bold))
                             .padding(.vertical, 8)
                             .frame(maxWidth: .infinity)
@@ -75,13 +91,25 @@ struct FeaturedBannerCard: View {
                             .foregroundStyle(.black)
                             .clipShape(Capsule())
 
-                        Button("+ List") { }
+                        Button(action: onToggleList) {
+                            HStack(spacing: 6) {
+                                if isUpdatingTrackedState {
+                                    ProgressView()
+                                        .tint(isTracked ? .black : .white)
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: isTracked ? "checkmark.circle.fill" : "plus.circle")
+                                }
+                                Text(isTracked ? "In List" : "Add To List")
+                            }
                             .font(.caption.weight(.semibold))
-                            .padding(.vertical, 8)
                             .frame(maxWidth: .infinity)
-                            .background(Color.white.opacity(0.15))
-                            .foregroundStyle(.white)
+                        }
+                            .padding(.vertical, 8)
+                            .background(isTracked ? AniTrackTheme.accent : Color.white.opacity(0.15))
+                            .foregroundStyle(isTracked ? .black : .white)
                             .clipShape(Capsule())
+                            .disabled(isUpdatingTrackedState)
                     }
                 }
             }

@@ -1,0 +1,31 @@
+query MediaListEntry($userId: Int, $mediaId: Int, $type: MediaType) {
+  entry: MediaList(userId: $userId, mediaId: $mediaId, type: $type) {
+    id
+    status
+    score
+    progress
+    startedAt {
+      year
+      month
+      day
+    }
+    completedAt {
+      year
+      month
+      day
+    }
+    media {
+      id
+      episodes
+      title {
+        romaji
+        english
+        userPreferred
+      }
+      coverImage {
+        large
+        extraLarge
+      }
+    }
+  }
+}
