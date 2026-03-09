@@ -1,0 +1,13 @@
+// @generated
+// This file was automatically generated and should not be edited.
+
+import ApolloAPI
+
+extension AniTrackAPI.Objects {
+  /// Deleted data type
+  static let Deleted = ApolloAPI.Object(
+    typename: "Deleted",
+    implementedInterfaces: [],
+    keyFields: nil
+  )
+}

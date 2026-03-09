@@ -30,17 +30,24 @@ extension AniTrackAPI {
     static func objectType(forTypename typename: String) -> ApolloAPI.Object? {
       switch typename {
       case "AiringSchedule": return AniTrackAPI.Objects.AiringSchedule
+      case "Deleted": return AniTrackAPI.Objects.Deleted
+      case "FuzzyDate": return AniTrackAPI.Objects.FuzzyDate
       case "Media": return AniTrackAPI.Objects.Media
       case "MediaConnection": return AniTrackAPI.Objects.MediaConnection
       case "MediaCoverImage": return AniTrackAPI.Objects.MediaCoverImage
       case "MediaEdge": return AniTrackAPI.Objects.MediaEdge
+      case "MediaList": return AniTrackAPI.Objects.MediaList
+      case "MediaListCollection": return AniTrackAPI.Objects.MediaListCollection
+      case "MediaListGroup": return AniTrackAPI.Objects.MediaListGroup
       case "MediaTitle": return AniTrackAPI.Objects.MediaTitle
       case "MediaTrailer": return AniTrackAPI.Objects.MediaTrailer
+      case "Mutation": return AniTrackAPI.Objects.Mutation
       case "Page": return AniTrackAPI.Objects.Page
       case "PageInfo": return AniTrackAPI.Objects.PageInfo
       case "Query": return AniTrackAPI.Objects.Query
       case "Studio": return AniTrackAPI.Objects.Studio
       case "StudioConnection": return AniTrackAPI.Objects.StudioConnection
+      case "User": return AniTrackAPI.Objects.User
       default: return nil
       }
     }
