@@ -1,14 +1,17 @@
 import Foundation
 
 final class AniListStatsService: StatsService {
-    private let service: AniListGraphQLService
+    private let service: any AniListGraphQLServing
 
-    init(service: AniListGraphQLService) {
+    init(service: any AniListGraphQLServing) {
         self.service = service
     }
 
     func fetchAnimeStats() async throws -> StatsDashboard {
-        let payload = try await service.fetch(query: AniTrackAPI.UserAnimeStatisticsQuery())
+        let payload = try await service.fetch(
+            query: AniTrackAPI.UserAnimeStatisticsQuery(),
+            cachePolicy: .fetchIgnoringCacheCompletely
+        )
         guard let viewer = payload.viewer else {
             throw AniListServiceError.emptyData
         }
@@ -18,7 +21,8 @@ final class AniListStatsService: StatsService {
 
         if needsFallback(for: animeStats) {
             let fallback = try await service.fetch(
-                query: AniTrackAPI.UserAnimeStatisticsFallbackQuery(userId: .some(viewer.id))
+                query: AniTrackAPI.UserAnimeStatisticsFallbackQuery(userId: .some(viewer.id)),
+                cachePolicy: .fetchIgnoringCacheCompletely
             )
             fallbackEntries = flattenEntries(from: fallback)
         }
