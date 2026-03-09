@@ -1,4 +1,5 @@
 import Foundation
+import ApolloAPI
 
 final class AniListAnimeRepository: AnimeRepository {
     private let service: AniListGraphQLService
@@ -9,23 +10,18 @@ final class AniListAnimeRepository: AnimeRepository {
 
     func fetchHomeFeed() async throws -> HomeFeed {
         let seasonData = MediaSeasonHelper.currentSeasonAndYear()
-        let variables: [String: GraphQLValue] = [
-            "page": .int(1),
-            "perPage": .int(12),
-            "season": .string(seasonData.season),
-            "seasonYear": .int(seasonData.year)
-        ]
-
-        let payload = try await service.execute(
-            query: AniListQueries.homeFeed,
-            variables: variables,
-            responseType: HomeFeedResponseDTO.self
+        let query = AniTrackAPI.HomeFeedQuery(
+            page: .some(1),
+            perPage: .some(12),
+            season: .some(GraphQLEnum(rawValue: seasonData.season)),
+            seasonYear: .some(seasonData.year)
         )
+        let payload = try await service.fetch(query: query)
 
-        let trending = mapMediaList(payload.trending.media)
-        let seasonPopular = mapMediaList(payload.seasonPopular.media)
-        let recommended = mapMediaList(payload.recommended.media)
-        let airing = mapMediaList(payload.airing.media)
+        let trending = mapMediaCards(payload.trending?.media?.compactMap { $0?.fragments.mediaCard })
+        let seasonPopular = mapMediaCards(payload.seasonPopular?.media?.compactMap { $0?.fragments.mediaCard })
+        let recommended = mapMediaCards(payload.recommended?.media?.compactMap { $0?.fragments.mediaCard })
+        let airing = mapMediaCards(payload.airing?.media?.compactMap { $0?.fragments.mediaCard })
 
         let featured = trending.first ?? seasonPopular.first
         let continueWatching = Array(seasonPopular.prefix(3)).enumerated().map { index, anime in
@@ -47,133 +43,94 @@ final class AniListAnimeRepository: AnimeRepository {
     }
 
     func fetchAnimeDetail(id: Int) async throws -> AnimeDetail {
-        let payload = try await service.execute(
-            query: AniListQueries.animeDetail,
-            variables: [
-                "page": .int(1),
-                "id": .int(id),
-                "type": .string("ANIME"),
-                "isAdult": .bool(false)
-            ],
-            responseType: AnimeDetailResponseDTO.self
-        )
-
-        guard let dto = payload.page.media?.compactMap({ $0 }).first else {
+        let payload = try await service.fetch(query: AniTrackAPI.AnimeDetailQuery(id: id))
+        guard let media = payload.page?.media?.compactMap({ $0 }).first else {
             throw AniListServiceError.emptyData
         }
 
-        let title = resolveTitle(english: dto.title?.english, romaji: dto.title?.romaji, fallback: "Unknown Title")
-        let subtitle = dto.title?.native ?? dto.title?.romaji ?? ""
-        let studios = (dto.studios?.nodes ?? [])
-            .compactMap { $0?.name?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let title = resolveTitle(english: media.title?.english, romaji: media.title?.romaji, fallback: "Unknown Title")
+        let subtitle = media.title?.native ?? media.title?.romaji ?? ""
+        let studios = (media.studios?.nodes ?? [])
+            .compactMap { $0?.name.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        let relations = mapRelations(dto.relations?.edges, currentID: dto.id)
-        let seasonLabel = "\(dto.season?.capitalized ?? "Unknown") \(dto.seasonYear.map(String.init) ?? "")".trimmingCharacters(in: .whitespaces)
+        let relations = mapRelations(media.relations?.edges, currentID: media.id)
+        let seasonLabel = "\(readable(media.season?.rawValue)) \(media.seasonYear.map(String.init) ?? "")".trimmingCharacters(in: .whitespaces)
 
         return AnimeDetail(
-            id: dto.id,
+            id: media.id,
             title: title,
             subtitle: subtitle,
-            description: cleanDescription(dto.description),
-            genres: dto.genres ?? [],
+            description: cleanDescription(media.description),
+            genres: media.genres?.compactMap { $0 } ?? [],
             studios: studios,
-            score: dto.averageScore,
-            popularity: dto.popularity,
-            favorites: dto.favourites,
-            episodes: dto.episodes,
-            duration: dto.duration,
+            score: media.averageScore,
+            popularity: media.popularity,
+            favorites: media.favourites,
+            episodes: media.episodes,
+            duration: media.duration,
             seasonLabel: seasonLabel,
-            status: readable(dto.status),
-            format: readable(dto.format),
-            source: readable(dto.source),
-            trailerURL: trailerURL(from: dto.trailer),
-            bannerImage: dto.bannerImage,
-            coverImage: dto.coverImage?.extraLarge ?? dto.coverImage?.large,
+            status: readable(media.status?.rawValue),
+            format: readable(media.format?.rawValue),
+            source: readable(media.source?.rawValue),
+            trailerURL: trailerURL(from: media.trailer),
+            bannerImage: media.bannerImage,
+            coverImage: media.coverImage?.extraLarge ?? media.coverImage?.large,
             relations: relations
         )
     }
 
     func fetchDiscover(page: Int, filters: DiscoverFilters) async throws -> DiscoverPage {
-        var variables: [String: GraphQLValue] = [
-            "page": .int(max(1, page)),
-            "type": .string("ANIME"),
-            "isAdult": .bool(false),
-            "sort": .array([.string(filters.sort)])
-        ]
-
         let search = filters.search.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !search.isEmpty {
-            variables["search"] = .string(search)
-        }
-        if let season = filters.season {
-            variables["season"] = .string(season)
-        }
-        if let seasonYear = filters.seasonYear {
-            variables["seasonYear"] = .int(seasonYear)
-        }
-        if let format = filters.format {
-            variables["format"] = .array([.string(format)])
-        }
-        if let status = filters.status {
-            variables["status"] = .string(status)
-        }
-        if !filters.genres.isEmpty {
-            variables["genres"] = .array(filters.genres.map { .string($0) })
-        }
-
-        let payload = try await service.execute(
-            query: AniListQueries.discoverAnime,
-            variables: variables,
-            responseType: DiscoverResponseDTO.self
+        let query = AniTrackAPI.DiscoverAnimeQuery(
+            page: .some(max(1, page)),
+            isAdult: .some(false),
+            search: search.isEmpty ? .none : .some(search),
+            format: filters.format.map { .some([GraphQLEnum(rawValue: $0)]) } ?? .none,
+            status: filters.status.map { .some(GraphQLEnum(rawValue: $0)) } ?? .none,
+            season: filters.season.map { .some(GraphQLEnum(rawValue: $0)) } ?? .none,
+            seasonYear: filters.seasonYear.map(GraphQLNullable.some) ?? .none,
+            genres: filters.genres.isEmpty ? .none : .some(filters.genres.map { Optional($0) }),
+            sort: .some([GraphQLEnum(rawValue: filters.sort)])
         )
+        let payload = try await service.fetch(query: query)
 
         return DiscoverPage(
-            media: mapMediaList(payload.page.media),
-            hasNextPage: payload.page.pageInfo?.hasNextPage ?? false
+            media: mapMediaCards(payload.page?.media?.compactMap { $0?.fragments.mediaCard }),
+            hasNextPage: payload.page?.pageInfo?.hasNextPage ?? false
         )
     }
 
     func fetchNextAiring(mediaID: Int) async throws -> AiringScheduleInfo? {
-        let payload = try await service.execute(
-            query: AniListQueries.nextAiring,
-            variables: ["mediaId": .int(mediaID)],
-            responseType: NextAiringResponseDTO.self
-        )
-
-        guard
-            let schedule = payload.airingSchedule,
-            let episode = schedule.episode,
-            let airingAt = schedule.airingAt
-        else {
+        let payload = try await service.fetch(query: AniTrackAPI.NextAiringQuery(mediaId: .some(mediaID)))
+        guard let schedule = payload.airingSchedule else {
             return nil
         }
 
         return AiringScheduleInfo(
-            episode: episode,
-            airingAt: Date(timeIntervalSince1970: TimeInterval(airingAt))
+            episode: schedule.episode,
+            airingAt: Date(timeIntervalSince1970: TimeInterval(schedule.airingAt))
         )
     }
 
-    private func mapMediaList(_ mediaList: [MediaDTO?]?) -> [AnimeMedia] {
-        (mediaList ?? []).compactMap { dto in
-            guard let dto else { return nil }
+    private func mapMediaCards(_ mediaList: [AniTrackAPI.MediaCard]?) -> [AnimeMedia] {
+        (mediaList ?? []).map { card in
             let resolvedTitle = resolveTitle(
-                english: dto.title.english,
-                romaji: dto.title.romaji,
+                english: card.title?.english,
+                romaji: card.title?.romaji,
                 fallback: "Unknown Title"
             )
-            let cleanedDescription = cleanDescription(dto.description)
+            let cleanedDescription = cleanDescription(card.description)
 
             return AnimeMedia(
-                id: dto.id,
+                id: card.id,
                 title: resolvedTitle,
-                subtitle: dto.title.romaji ?? "",
+                subtitle: card.title?.romaji ?? "",
                 description: cleanedDescription,
-                genres: dto.genres ?? [],
-                score: dto.averageScore,
-                episodes: dto.episodes,
-                bannerImage: dto.bannerImage,
-                coverImage: dto.coverImage?.extraLarge ?? dto.coverImage?.large
+                genres: card.genres?.compactMap { $0 } ?? [],
+                score: card.averageScore,
+                episodes: card.episodes,
+                bannerImage: card.bannerImage,
+                coverImage: card.coverImage?.large
             )
         }
     }
@@ -213,7 +170,7 @@ final class AniListAnimeRepository: AnimeRepository {
             .joined(separator: " ")
     }
 
-    private func trailerURL(from trailer: MediaTrailerDTO?) -> URL? {
+    private func trailerURL(from trailer: AniTrackAPI.AnimeDetailQuery.Data.Page.Medium.Trailer?) -> URL? {
         guard let trailer, let id = trailer.id, let site = trailer.site?.lowercased() else { return nil }
 
         if site.contains("youtube") {
@@ -225,21 +182,21 @@ final class AniListAnimeRepository: AnimeRepository {
         return nil
     }
 
-    private func mapRelations(_ edges: [MediaRelationEdgeDTO?]?, currentID: Int) -> [AnimeRelation] {
+    private func mapRelations(_ edges: [AniTrackAPI.AnimeDetailQuery.Data.Page.Medium.Relations.Edge?]?, currentID: Int) -> [AnimeRelation] {
         var seen: Set<Int> = []
 
         return (edges ?? []).compactMap { edge in
             guard let edge, let node = edge.node else { return nil }
             guard node.id != currentID else { return nil }
-            guard (node.type ?? "ANIME") == "ANIME" else { return nil }
+            guard node.type?.rawValue == "ANIME" else { return nil }
             guard !seen.contains(node.id) else { return nil }
 
             seen.insert(node.id)
             return AnimeRelation(
                 id: node.id,
                 title: resolveTitle(english: node.title?.english, romaji: node.title?.romaji, fallback: "Unknown Title"),
-                relationType: readable(edge.relationType),
-                format: readable(node.format),
+                relationType: readable(edge.relationType?.rawValue),
+                format: readable(node.format?.rawValue),
                 score: node.averageScore,
                 coverImage: node.coverImage?.extraLarge ?? node.coverImage?.large
             )

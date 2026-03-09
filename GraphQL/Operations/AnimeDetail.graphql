@@ -1,0 +1,57 @@
+query AnimeDetail($id: Int!, $isAdult: Boolean = false, $sort: [MediaSort] = [POPULARITY_DESC, SCORE_DESC]) {
+  Page(page: 1, perPage: 1) {
+    media(id: $id, type: ANIME, sort: $sort, isAdult: $isAdult) {
+      id
+      title {
+        romaji
+        english
+        native
+      }
+      description(asHtml: false)
+      episodes
+      duration
+      averageScore
+      popularity
+      favourites
+      status
+      season
+      seasonYear
+      format
+      source
+      genres
+      bannerImage
+      coverImage {
+        extraLarge
+        large
+      }
+      trailer {
+        site
+        id
+      }
+      studios {
+        nodes {
+          name
+        }
+      }
+      relations {
+        edges {
+          relationType(version: 2)
+          node {
+            id
+            type
+            format
+            averageScore
+            title {
+              romaji
+              english
+            }
+            coverImage {
+              extraLarge
+              large
+            }
+          }
+        }
+      }
+    }
+  }
+}

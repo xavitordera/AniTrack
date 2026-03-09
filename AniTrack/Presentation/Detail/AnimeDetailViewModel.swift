@@ -33,11 +33,18 @@ final class AnimeDetailViewModel: ObservableObject {
 
         do {
             detail = try await repository.fetchAnimeDetail(id: animeID)
-            nextAiring = try await repository.fetchNextAiring(mediaID: animeID)
-            startCountdownIfNeeded()
         } catch {
             errorText = "Unable to load anime details right now."
+            isLoading = false
+            return
         }
+
+        do {
+            nextAiring = try await repository.fetchNextAiring(mediaID: animeID)
+        } catch {
+            nextAiring = nil
+        }
+        startCountdownIfNeeded()
 
         isLoading = false
     }
