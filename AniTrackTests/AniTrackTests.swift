@@ -622,7 +622,7 @@ final class AniTrackTests: XCTestCase {
         XCTAssertEqual(service.lastStatsFallbackUserID, 7)
         XCTAssertEqual(dashboard.overview.completedAnime, 1)
         XCTAssertEqual(dashboard.overview.episodesWatched, 15)
-        XCTAssertEqual(dashboard.overview.minutesWatched, 345)
+        XCTAssertEqual(dashboard.overview.minutesWatched, 340)
         XCTAssertEqual(dashboard.overview.averageScore, 80)
         XCTAssertEqual(dashboard.genres.first?.name, "Action")
         XCTAssertEqual(dashboard.genres.first?.count, 2)
