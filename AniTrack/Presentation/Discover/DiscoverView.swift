@@ -5,6 +5,7 @@ struct DiscoverView: View {
     private let makeDetailViewModel: (Int) -> AnimeDetailViewModel
 
     @State private var isFilterSheetPresented = false
+    @FocusState private var isSearchFocused: Bool
 
     init(viewModel: DiscoverViewModel, makeDetailViewModel: @escaping (Int) -> AnimeDetailViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -43,7 +44,14 @@ struct DiscoverView: View {
                         .padding(.top, 10)
                         .padding(.bottom, 22)
                     }
+                    .scrollDismissesKeyboard(.interactively)
+                    .simultaneousGesture(
+                        TapGesture().onEnded {
+                            isSearchFocused = false
+                        }
+                    )
                     .refreshable {
+                        isSearchFocused = false
                         await viewModel.loadInitial()
                     }
                 }
@@ -116,15 +124,21 @@ struct DiscoverView: View {
                 .autocorrectionDisabled()
                 .foregroundStyle(.white)
                 .submitLabel(.search)
+                .focused($isSearchFocused)
                 .onSubmit {
+                    isSearchFocused = false
                     Task {
                         await viewModel.applyFilters()
                     }
+                }
+                .onChange(of: viewModel.searchText) { _ in
+                    viewModel.searchTextDidChange()
                 }
 
             if !viewModel.searchText.isEmpty {
                 Button {
                     viewModel.searchText = ""
+                    isSearchFocused = false
                     Task {
                         await viewModel.applyFilters()
                     }
@@ -141,6 +155,14 @@ struct DiscoverView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(AniTrackTheme.surface)
         )
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    isSearchFocused = false
+                }
+            }
+        }
     }
 
     private var activeFiltersRow: some View {
@@ -173,7 +195,7 @@ struct DiscoverView: View {
     private func mediaGrid(contentWidth: CGFloat) -> some View {
         let columns = gridColumns(contentWidth: contentWidth)
 
-        return LazyVGrid(columns: columns, spacing: 14) {
+        return LazyVGrid(columns: columns, spacing: 18) {
             ForEach(viewModel.items) { anime in
                 NavigationLink {
                     AnimeDetailView(
@@ -203,7 +225,7 @@ struct DiscoverView: View {
     private func loadingGrid(contentWidth: CGFloat) -> some View {
         let columns = gridColumns(contentWidth: contentWidth)
 
-        return LazyVGrid(columns: columns, spacing: 14) {
+        return LazyVGrid(columns: columns, spacing: 18) {
             ForEach(0..<8, id: \.self) { _ in
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(AniTrackTheme.card.opacity(0.75))
@@ -232,7 +254,7 @@ struct DiscoverView: View {
 
     private func gridColumns(contentWidth: CGFloat) -> [GridItem] {
         let count = contentWidth > 500 ? 3 : 2
-        return Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: count)
+        return Array(repeating: GridItem(.flexible(), spacing: 16, alignment: .top), count: count)
     }
 
     private func filterPill(text: String) -> some View {

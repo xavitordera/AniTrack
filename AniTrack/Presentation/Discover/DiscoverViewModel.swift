@@ -40,17 +40,24 @@ final class DiscoverViewModel: ObservableObject {
     private let repository: AnimeRepository
     private var currentPage = 1
     private var hasNextPage = true
+    private var searchDebounceTask: Task<Void, Never>?
+    private var pendingReload = false
+    private let searchDebounceNanoseconds: UInt64 = 350_000_000
 
     init(repository: AnimeRepository) {
         self.repository = repository
     }
 
     func loadInitial() async {
-        guard !isLoadingInitial else { return }
+        guard !isLoadingInitial else {
+            pendingReload = true
+            return
+        }
         isLoadingInitial = true
         errorText = nil
         currentPage = 1
         hasNextPage = true
+        pendingReload = false
 
         do {
             let page = try await repository.fetchDiscover(page: currentPage, filters: currentFilters)
@@ -62,6 +69,11 @@ final class DiscoverViewModel: ObservableObject {
         }
 
         isLoadingInitial = false
+
+        if pendingReload {
+            pendingReload = false
+            await loadInitial()
+        }
     }
 
     func loadMoreIfNeeded(currentItem item: AnimeMedia) async {
@@ -85,7 +97,17 @@ final class DiscoverViewModel: ObservableObject {
     }
 
     func applyFilters() async {
+        searchDebounceTask?.cancel()
         await loadInitial()
+    }
+
+    func searchTextDidChange() {
+        searchDebounceTask?.cancel()
+        searchDebounceTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: searchDebounceNanoseconds)
+            guard !Task.isCancelled else { return }
+            await self?.loadInitial()
+        }
     }
 
     func clearFilters() {
@@ -125,5 +147,9 @@ final class DiscoverViewModel: ObservableObject {
         let existingIDs = Set(items.map(\.id))
         let uniqueItems = newItems.filter { !existingIDs.contains($0.id) }
         items.append(contentsOf: uniqueItems)
+    }
+
+    deinit {
+        searchDebounceTask?.cancel()
     }
 }
