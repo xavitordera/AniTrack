@@ -757,8 +757,8 @@ final class AniTrackTests: XCTestCase {
                         "__typename": "UserStatistics",
                         "count": 2,
                         "meanScore": 0.0,
-                        "minutesWatched": 0,
-                        "episodesWatched": 0,
+                        "minutesWatched": 340,
+                        "episodesWatched": 15,
                         "genres": [],
                         "studios": [],
                         "statuses": []
