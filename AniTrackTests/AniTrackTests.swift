@@ -543,6 +543,94 @@ final class AniTrackTests: XCTestCase {
         XCTAssertEqual(entry.status, .planning)
     }
 
+    func testStatsViewModelSkipsLoadWhenLoggedOut() async {
+        let service = MockStatsService(result: .success(makeStatsDashboard()))
+        let viewModel = StatsViewModel(service: service)
+
+        viewModel.syncAuthentication(isAuthenticated: false)
+        await viewModel.load()
+
+        XCTAssertNil(viewModel.dashboard)
+        XCTAssertEqual(service.fetchCount, 0)
+    }
+
+    func testStatsViewModelLoadsWhenAuthenticated() async {
+        let service = MockStatsService(result: .success(makeStatsDashboard()))
+        let viewModel = StatsViewModel(service: service)
+
+        viewModel.syncAuthentication(isAuthenticated: true)
+        await viewModel.load()
+
+        XCTAssertEqual(viewModel.dashboard?.overview.completedAnime, 12)
+        XCTAssertNil(viewModel.errorText)
+        XCTAssertGreaterThanOrEqual(service.fetchCount, 1)
+    }
+
+    func testStatsViewModelHandlesServiceFailure() async {
+        let service = MockStatsService(result: .failure(MockError.failed))
+        let viewModel = StatsViewModel(service: service)
+
+        viewModel.syncAuthentication(isAuthenticated: true)
+        await viewModel.load()
+
+        XCTAssertNil(viewModel.dashboard)
+        XCTAssertEqual(viewModel.errorText, "Unable to load your AniList stats right now.")
+    }
+
+    func testStatsViewModelResetsOnLogout() async {
+        let service = MockStatsService(result: .success(makeStatsDashboard()))
+        let viewModel = StatsViewModel(service: service)
+
+        viewModel.syncAuthentication(isAuthenticated: true)
+        await viewModel.load()
+
+        XCTAssertNotNil(viewModel.dashboard)
+
+        viewModel.syncAuthentication(isAuthenticated: false)
+
+        XCTAssertNil(viewModel.dashboard)
+        XCTAssertNil(viewModel.errorText)
+    }
+
+    func testAniListStatsServiceUsesBuiltInStatisticsWithoutFallback() async throws {
+        let service = MockGraphQLService()
+        service.userAnimeStatisticsData = try makeUserAnimeStatisticsData()
+        let statsService = AniListStatsService(service: service)
+
+        let dashboard = try await statsService.fetchAnimeStats()
+
+        XCTAssertEqual(dashboard.userName, "xavi")
+        XCTAssertEqual(dashboard.overview.completedAnime, 12)
+        XCTAssertEqual(dashboard.overview.episodesWatched, 144)
+        XCTAssertEqual(dashboard.overview.minutesWatched, 3_456)
+        XCTAssertEqual(dashboard.overview.averageScore, 81.4)
+        XCTAssertEqual(dashboard.genres.first?.name, "Action")
+        XCTAssertEqual(dashboard.studios.first?.name, "MAPPA")
+        XCTAssertEqual(service.userAnimeStatisticsFetchCount, 1)
+        XCTAssertEqual(service.userAnimeStatisticsFallbackFetchCount, 0)
+    }
+
+    func testAniListStatsServiceFallsBackWhenStatisticsAreIncomplete() async throws {
+        let service = MockGraphQLService()
+        service.userAnimeStatisticsData = try makeIncompleteUserAnimeStatisticsData()
+        service.userAnimeStatisticsFallbackData = try makeUserAnimeStatisticsFallbackData()
+        let statsService = AniListStatsService(service: service)
+
+        let dashboard = try await statsService.fetchAnimeStats()
+
+        XCTAssertEqual(service.userAnimeStatisticsFallbackFetchCount, 1)
+        XCTAssertEqual(service.lastStatsFallbackUserID, 7)
+        XCTAssertEqual(dashboard.overview.completedAnime, 1)
+        XCTAssertEqual(dashboard.overview.episodesWatched, 15)
+        XCTAssertEqual(dashboard.overview.minutesWatched, 340)
+        XCTAssertEqual(dashboard.overview.averageScore, 80)
+        XCTAssertEqual(dashboard.genres.first?.name, "Action")
+        XCTAssertEqual(dashboard.genres.first?.count, 2)
+        XCTAssertEqual(dashboard.studios.first?.name, "Bones")
+        XCTAssertEqual(dashboard.statusBreakdown.first(where: { $0.status == .current })?.count, 1)
+        XCTAssertEqual(dashboard.statusBreakdown.first(where: { $0.status == .completed })?.count, 1)
+    }
+
     private func makeAnime(id: Int, title: String, subtitle: String, genres: [String]) -> AnimeMedia {
         AnimeMedia(
             id: id,
@@ -579,6 +667,175 @@ final class AniTrackTests: XCTestCase {
             coverImage: nil,
             relations: []
         )
+    }
+
+    private func makeStatsDashboard() -> StatsDashboard {
+        StatsDashboard(
+            userName: "xavi",
+            overview: StatsOverview(
+                completedAnime: 12,
+                episodesWatched: 144,
+                minutesWatched: 3_456,
+                averageScore: 81.4
+            ),
+            genres: [StatsCountItem(name: "Action", count: 20)],
+            studios: [StatsCountItem(name: "MAPPA", count: 8)],
+            statusBreakdown: [
+                StatsStatusItem(status: .current, count: 5),
+                StatsStatusItem(status: .completed, count: 12),
+                StatsStatusItem(status: .planning, count: 14),
+                StatsStatusItem(status: .dropped, count: 2),
+                StatsStatusItem(status: .onHold, count: 1)
+            ]
+        )
+    }
+
+    private func makeUserAnimeStatisticsData() throws -> AniTrackAPI.UserAnimeStatisticsQuery.Data {
+        try AniTrackAPI.UserAnimeStatisticsQuery.Data(data: [
+            "Viewer": [
+                "__typename": "User",
+                "id": 7,
+                "name": "xavi",
+                "statistics": [
+                    "__typename": "UserStatisticTypes",
+                    "anime": [
+                        "__typename": "UserStatistics",
+                        "count": 24,
+                        "meanScore": 81.4,
+                        "minutesWatched": 3_456,
+                        "episodesWatched": 144,
+                        "genres": [
+                            [
+                                "__typename": "UserGenreStatistic",
+                                "genre": "Action",
+                                "count": 20
+                            ],
+                            [
+                                "__typename": "UserGenreStatistic",
+                                "genre": "Drama",
+                                "count": 12
+                            ]
+                        ],
+                        "studios": [
+                            [
+                                "__typename": "UserStudioStatistic",
+                                "count": 8,
+                                "studio": [
+                                    "__typename": "Studio",
+                                    "id": 1,
+                                    "name": "MAPPA"
+                                ]
+                            ]
+                        ],
+                        "statuses": [
+                            [
+                                "__typename": "UserStatusStatistic",
+                                "status": "CURRENT",
+                                "count": 5
+                            ],
+                            [
+                                "__typename": "UserStatusStatistic",
+                                "status": "COMPLETED",
+                                "count": 12
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ])
+    }
+
+    private func makeIncompleteUserAnimeStatisticsData() throws -> AniTrackAPI.UserAnimeStatisticsQuery.Data {
+        try AniTrackAPI.UserAnimeStatisticsQuery.Data(data: [
+            "Viewer": [
+                "__typename": "User",
+                "id": 7,
+                "name": "xavi",
+                "statistics": [
+                    "__typename": "UserStatisticTypes",
+                    "anime": [
+                        "__typename": "UserStatistics",
+                        "count": 2,
+                        "meanScore": 0.0,
+                        "minutesWatched": 0,
+                        "episodesWatched": 0,
+                        "genres": [],
+                        "studios": [],
+                        "statuses": []
+                    ]
+                ]
+            ]
+        ])
+    }
+
+    private func makeUserAnimeStatisticsFallbackData() throws -> AniTrackAPI.UserAnimeStatisticsFallbackQuery.Data {
+        try AniTrackAPI.UserAnimeStatisticsFallbackQuery.Data(data: [
+            "MediaListCollection": [
+                "__typename": "MediaListCollection",
+                "lists": [
+                    [
+                        "__typename": "MediaListGroup",
+                        "status": "CURRENT",
+                        "entries": [
+                            [
+                                "__typename": "MediaList",
+                                "id": 1,
+                                "status": "CURRENT",
+                                "score": 70.0,
+                                "progress": 5,
+                                "media": [
+                                    "__typename": "Media",
+                                    "id": 101,
+                                    "episodes": 12,
+                                    "duration": 24,
+                                    "genres": ["Action", "Comedy"],
+                                    "studios": [
+                                        "__typename": "StudioConnection",
+                                        "nodes": [
+                                            [
+                                                "__typename": "Studio",
+                                                "id": 900,
+                                                "name": "Bones"
+                                            ]
+                                        ]
+                                    ]
+                                ]
+                            ]
+                        ]
+                    ],
+                    [
+                        "__typename": "MediaListGroup",
+                        "status": "COMPLETED",
+                        "entries": [
+                            [
+                                "__typename": "MediaList",
+                                "id": 2,
+                                "status": "COMPLETED",
+                                "score": 90.0,
+                                "progress": 10,
+                                "media": [
+                                    "__typename": "Media",
+                                    "id": 102,
+                                    "episodes": 10,
+                                    "duration": 22,
+                                    "genres": ["Action", "Drama"],
+                                    "studios": [
+                                        "__typename": "StudioConnection",
+                                        "nodes": [
+                                            [
+                                                "__typename": "Studio",
+                                                "id": 901,
+                                                "name": "Bones"
+                                            ]
+                                        ]
+                                    ]
+                                ]
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ])
     }
 
     private func makeListEntry(id: Int, mediaID: Int, title: String, status: MediaListStatus = .current) -> MediaListEntry {
@@ -714,21 +971,50 @@ private enum MockError: Error {
     case failed
 }
 
+private final class MockStatsService: StatsService {
+    private let result: Result<StatsDashboard, Error>
+    private(set) var fetchCount = 0
+
+    init(result: Result<StatsDashboard, Error>) {
+        self.result = result
+    }
+
+    func fetchAnimeStats() async throws -> StatsDashboard {
+        fetchCount += 1
+        return try result.get()
+    }
+}
 private final class MockGraphQLService: AniListGraphQLServing {
     var viewerData: AniTrackAPI.ViewerQuery.Data?
     var mediaListCollectionData: AniTrackAPI.MediaListCollectionQuery.Data?
     var mediaListEntryData: AniTrackAPI.MediaListEntryQuery.Data?
     var saveMediaListEntryData: AniTrackAPI.SaveMediaListEntryMutation.Data?
     var deleteMediaListEntryData: AniTrackAPI.DeleteMediaListEntryMutation.Data?
+    var userAnimeStatisticsData: AniTrackAPI.UserAnimeStatisticsQuery.Data?
+    var userAnimeStatisticsFallbackData: AniTrackAPI.UserAnimeStatisticsFallbackQuery.Data?
     private(set) var viewerFetchCount = 0
     private(set) var lastMediaListEntryMediaID: Int?
     private(set) var lastDeletedEntryID: Int?
+    private(set) var userAnimeStatisticsFetchCount = 0
+    private(set) var userAnimeStatisticsFallbackFetchCount = 0
+    private(set) var lastStatsFallbackUserID: Int?
 
     func fetch<Query: GraphQLQuery>(query: Query, cachePolicy: CachePolicy) async throws -> Query.Data {
         switch query {
         case is AniTrackAPI.ViewerQuery:
             viewerFetchCount += 1
             return viewerData as! Query.Data
+        case is AniTrackAPI.UserAnimeStatisticsQuery:
+            userAnimeStatisticsFetchCount += 1
+            return userAnimeStatisticsData as! Query.Data
+        case let query as AniTrackAPI.UserAnimeStatisticsFallbackQuery:
+            userAnimeStatisticsFallbackFetchCount += 1
+            if case let .some(userID) = query.userId {
+                lastStatsFallbackUserID = userID
+            } else {
+                lastStatsFallbackUserID = nil
+            }
+            return userAnimeStatisticsFallbackData as! Query.Data
         case let query as AniTrackAPI.MediaListCollectionQuery:
             _ = query
             return mediaListCollectionData as! Query.Data
