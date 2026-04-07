@@ -37,9 +37,7 @@ struct AniTrackHomeView: View {
                                     if !viewModel.filteredPopular.isEmpty {
                                         popularSection
                                     }
-                                    if !viewModel.continueWatching.isEmpty {
-                                        continueWatchingSection(contentWidth: contentWidth)
-                                    }
+                                    continueTrackingSection(contentWidth: contentWidth)
                                     if !viewModel.airingToday.isEmpty {
                                         airingTodaySection
                                     }
@@ -98,14 +96,12 @@ struct AniTrackHomeView: View {
             }
 
             skeletonSectionHeader
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(0..<2, id: \.self) { _ in
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(AniTrackTheme.card.opacity(0.7))
-                            .frame(width: continueCardWidth(contentWidth: contentWidth), height: 125)
-                            .shimmering()
-                    }
+            VStack(spacing: 10) {
+                ForEach(0..<3, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(AniTrackTheme.card.opacity(0.7))
+                        .frame(height: 142)
+                        .shimmering()
                 }
             }
 
@@ -259,20 +255,32 @@ struct AniTrackHomeView: View {
         }
     }
 
-    private func continueWatchingSection(contentWidth: CGFloat) -> some View {
+    private func continueTrackingSection(contentWidth: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionHeader(title: "Continue Watching")
+            sectionHeader(title: "Continue Tracking")
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(viewModel.continueWatching) { item in
-                        NavigationLink {
-                            detailDestination(animeID: item.anime.id)
-                        } label: {
-                            ContinueWatchingCard(item: item)
-                                .frame(width: continueCardWidth(contentWidth: contentWidth))
+            if viewModel.shouldShowTrackingPrompt {
+                continueTrackingPrompt
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ForEach(viewModel.continueTracking) { item in
+                            ContinueWatchingCard(
+                                item: item,
+                                isUpdating: viewModel.isUpdatingTracking(item.id),
+                                onOpen: {
+                                    selectedDetailID = SelectedAnime(id: item.id)
+                                },
+                                onPrimaryAction: {
+                                    if item.primaryAction == .viewDetails {
+                                        selectedDetailID = SelectedAnime(id: item.id)
+                                    } else {
+                                        Task { await viewModel.performPrimaryTrackingAction(for: item) }
+                                    }
+                                }
+                            )
+                            .frame(width: continueTrackingCardWidth(contentWidth: contentWidth))
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -346,8 +354,46 @@ struct AniTrackHomeView: View {
         max(170, min(230, contentWidth * 0.54))
     }
 
-    private func continueCardWidth(contentWidth: CGFloat) -> CGFloat {
-        max(165, min(230, contentWidth * 0.68))
+    private func continueTrackingCardWidth(contentWidth: CGFloat) -> CGFloat {
+        max(220, min(300, contentWidth * 0.8))
+    }
+
+    private var continueTrackingPrompt: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(viewModel.isSignedIn ? "Nothing in progress yet" : "Sign in to keep your anime progress in sync")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+
+            Text(
+                viewModel.isSignedIn
+                ? "When you start watching shows on AniList, they’ll appear here with quick episode actions."
+                : "AniTrack can turn your AniList watch progress into quick home-screen actions once you connect your account."
+            )
+            .font(.caption)
+            .foregroundStyle(AniTrackTheme.mutedText)
+
+            if viewModel.isSignedIn {
+                Button("Browse Trending") {
+                    viewModel.browseTrendingCTA()
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(AniTrackTheme.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(AniTrackTheme.card)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(.white.opacity(0.05), lineWidth: 1)
+        )
     }
 
     private func sectionHeader(title: String) -> some View {

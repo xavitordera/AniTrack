@@ -48,21 +48,23 @@ final class AniTrackTests: XCTestCase {
         let feed = HomeFeed(
             featured: naruto,
             trending: [naruto, haikyuu],
-            continueWatching: [ContinueWatchingItem(id: 1, anime: naruto, progress: 0.4)],
             recommended: [haikyuu],
             airingToday: [naruto]
         )
+        let authStore = AniListAuthStore()
+        authStore.updateToken("token", expiresIn: nil)
         let viewModel = HomeViewModel(
             repository: MockAnimeRepository(result: .success(feed)),
-            listRepository: MockListRepository(),
-            authStore: AniListAuthStore()
+            listRepository: MockListRepository(entries: [makeListEntry(id: 101, mediaID: 1, title: "Naruto", progress: 4)]),
+            authStore: authStore
         )
 
         await viewModel.load()
 
         XCTAssertEqual(viewModel.featured?.id, 1)
         XCTAssertEqual(viewModel.popular.count, 2)
-        XCTAssertEqual(viewModel.continueWatching.count, 1)
+        XCTAssertEqual(viewModel.continueTracking.count, 1)
+        XCTAssertEqual(viewModel.continueTracking.first?.progressLabel, "4/12 watched")
         XCTAssertEqual(viewModel.recommended.count, 1)
         XCTAssertEqual(viewModel.airingToday.count, 1)
         XCTAssertFalse(viewModel.isLoading)
@@ -81,6 +83,22 @@ final class AniTrackTests: XCTestCase {
         XCTAssertEqual(viewModel.errorText, "Unable to load AniList data right now.")
         XCTAssertFalse(viewModel.isLoading)
         XCTAssertTrue(viewModel.popular.isEmpty)
+    }
+
+    func testHomeSignedOutDoesNotShowTrackingItems() async {
+        let anime = makeAnime(id: 1, title: "Naruto", subtitle: "Naruto", genres: ["Action"])
+        let feed = HomeFeed(featured: anime, trending: [anime], recommended: [], airingToday: [])
+        let viewModel = HomeViewModel(
+            repository: MockAnimeRepository(result: .success(feed)),
+            listRepository: MockListRepository(entries: [makeListEntry(id: 1, mediaID: 1, title: "Naruto")]),
+            authStore: AniListAuthStore()
+        )
+
+        await viewModel.load()
+
+        XCTAssertTrue(viewModel.continueTracking.isEmpty)
+        XCTAssertTrue(viewModel.shouldShowTrackingPrompt)
+        XCTAssertFalse(viewModel.isSignedIn)
     }
 
     func testFilteredPopularByCategoryAndSearchText() {
@@ -140,7 +158,7 @@ final class AniTrackTests: XCTestCase {
 
     func testHomeLoadRefreshesTrackedIDsWhenAuthenticated() async {
         let anime = makeAnime(id: 1, title: "Naruto", subtitle: "Naruto", genres: ["Action"])
-        let feed = HomeFeed(featured: anime, trending: [anime], continueWatching: [], recommended: [], airingToday: [])
+        let feed = HomeFeed(featured: anime, trending: [anime], recommended: [], airingToday: [])
         let authStore = AniListAuthStore()
         authStore.updateToken("token", expiresIn: nil)
         let listRepository = MockListRepository(entries: [makeListEntry(id: 999, mediaID: 1, title: "Naruto")])
@@ -153,6 +171,30 @@ final class AniTrackTests: XCTestCase {
         await viewModel.load()
 
         XCTAssertTrue(viewModel.isTracked(1))
+    }
+
+    func testHomeLoadBuildsTrackingItemsFromCurrentAndRepeatingEntries() async {
+        let anime = makeAnime(id: 1, title: "Naruto", subtitle: "Naruto", genres: ["Action"])
+        let repeatAnime = makeAnime(id: 2, title: "Haikyu!!", subtitle: "Haikyu", genres: ["Sports"])
+        let planningAnime = makeAnime(id: 3, title: "Bleach", subtitle: "Bleach", genres: ["Action"])
+        let feed = HomeFeed(featured: anime, trending: [anime], recommended: [], airingToday: [])
+        let authStore = AniListAuthStore()
+        authStore.updateToken("token", expiresIn: nil)
+        let entries = [
+            makeListEntry(id: 1, mediaID: 1, title: "Naruto", status: .current, progress: 7),
+            makeListEntry(id: 2, mediaID: 2, title: "Haikyu!!", status: .repeating, progress: 2),
+            makeListEntry(id: 3, mediaID: 3, title: "Bleach", status: .planning, progress: 0)
+        ]
+        let viewModel = HomeViewModel(
+            repository: MockAnimeRepository(result: .success(feed)),
+            listRepository: MockListRepository(entries: entries),
+            authStore: authStore
+        )
+
+        await viewModel.load()
+
+        XCTAssertEqual(viewModel.continueTracking.map(\.id), [1, 2])
+        XCTAssertEqual(viewModel.continueTracking.last?.supportingText, "Rewatching: Episode 3")
     }
 
     func testHomeToggleTrackedRequiresAuthentication() async {
@@ -220,6 +262,79 @@ final class AniTrackTests: XCTestCase {
 
         XCTAssertEqual(viewModel.errorText, "AniList rejected the mutation")
         XCTAssertFalse(viewModel.isUpdating(4))
+    }
+
+    func testHomePrimaryTrackingActionIncrementsEpisodeProgress() async {
+        let anime = makeAnime(id: 42, title: "Frieren", subtitle: "Frieren", genres: ["Fantasy"])
+        let feed = HomeFeed(featured: anime, trending: [anime], recommended: [], airingToday: [])
+        let authStore = AniListAuthStore()
+        authStore.updateToken("token", expiresIn: nil)
+        let savedEntry = makeListEntry(id: 55, mediaID: 42, title: "Frieren", progress: 5)
+        let listRepository = MockListRepository(
+            entries: [makeListEntry(id: 55, mediaID: 42, title: "Frieren", progress: 4)],
+            saveResult: savedEntry
+        )
+        let viewModel = HomeViewModel(
+            repository: MockAnimeRepository(result: .success(feed)),
+            listRepository: listRepository,
+            authStore: authStore
+        )
+
+        await viewModel.load()
+        guard let item = viewModel.continueTracking.first else {
+            return XCTFail("Expected a tracking item")
+        }
+
+        await viewModel.performPrimaryTrackingAction(for: item)
+
+        XCTAssertEqual(listRepository.lastSavedPatch?.progress, 5)
+        XCTAssertEqual(listRepository.lastSavedPatch?.status, .current)
+        XCTAssertEqual(viewModel.continueTracking.first?.progressLabel, "5/12 watched")
+    }
+
+    func testHomePrimaryTrackingActionMarksCompletedSeriesComplete() async {
+        let anime = makeAnime(id: 99, title: "Mob Psycho 100", subtitle: "Mob", genres: ["Action"])
+        let feed = HomeFeed(featured: anime, trending: [anime], recommended: [], airingToday: [])
+        let authStore = AniListAuthStore()
+        authStore.updateToken("token", expiresIn: nil)
+        let completedEntry = makeListEntry(id: 88, mediaID: 99, title: "Mob Psycho 100", status: .completed, progress: 12)
+        let listRepository = MockListRepository(
+            entries: [makeListEntry(id: 88, mediaID: 99, title: "Mob Psycho 100", progress: 12)],
+            saveResult: completedEntry
+        )
+        let viewModel = HomeViewModel(
+            repository: MockAnimeRepository(result: .success(feed)),
+            listRepository: listRepository,
+            authStore: authStore
+        )
+
+        await viewModel.load()
+        guard let item = viewModel.continueTracking.first else {
+            return XCTFail("Expected a tracking item")
+        }
+
+        XCTAssertEqual(item.primaryAction, .markComplete)
+        await viewModel.performPrimaryTrackingAction(for: item)
+
+        XCTAssertEqual(listRepository.lastSavedPatch?.status, .completed)
+        XCTAssertTrue(viewModel.continueTracking.isEmpty)
+    }
+
+    func testHomeTrackingItemUsesViewDetailsWhenEpisodeCountUnknown() async {
+        let unknownAnime = makeAnime(id: 7, title: "One Piece", subtitle: "One Piece", genres: ["Adventure"], episodes: nil)
+        let item = HomeTrackingItem(
+            media: unknownAnime,
+            listEntryID: 70,
+            status: .current,
+            watchedEpisodes: 16,
+            totalEpisodes: nil,
+            nextAiringEpisode: nil,
+            nextAiringDate: nil
+        )
+
+        XCTAssertEqual(item.primaryAction, .viewDetails)
+        XCTAssertEqual(item.primaryActionLabel, "View Details")
+        XCTAssertEqual(item.progressLabel, "16 eps watched")
     }
 
     func testDetailReminderScheduleSuccessSetsMessage() async {
@@ -631,7 +746,7 @@ final class AniTrackTests: XCTestCase {
         XCTAssertEqual(dashboard.statusBreakdown.first(where: { $0.status == .completed })?.count, 1)
     }
 
-    private func makeAnime(id: Int, title: String, subtitle: String, genres: [String]) -> AnimeMedia {
+    private func makeAnime(id: Int, title: String, subtitle: String, genres: [String], episodes: Int? = 12) -> AnimeMedia {
         AnimeMedia(
             id: id,
             title: title,
@@ -639,7 +754,7 @@ final class AniTrackTests: XCTestCase {
             description: "desc",
             genres: genres,
             score: 80,
-            episodes: 12,
+            episodes: episodes,
             bannerImage: nil,
             coverImage: nil
         )
@@ -838,14 +953,21 @@ final class AniTrackTests: XCTestCase {
         ])
     }
 
-    private func makeListEntry(id: Int, mediaID: Int, title: String, status: MediaListStatus = .current) -> MediaListEntry {
-        let anime = makeAnime(id: mediaID, title: title, subtitle: title, genres: ["Action"])
+    private func makeListEntry(
+        id: Int,
+        mediaID: Int,
+        title: String,
+        status: MediaListStatus = .current,
+        progress: Int? = 4,
+        episodes: Int? = 12
+    ) -> MediaListEntry {
+        let anime = makeAnime(id: mediaID, title: title, subtitle: title, genres: ["Action"], episodes: episodes)
         return MediaListEntry(
             id: id,
             media: anime,
             status: status,
             score: 80,
-            progress: 4,
+            progress: progress,
             startedAt: FuzzyDate(year: 2024, month: 10, day: 1),
             completedAt: nil,
             groupName: "Watching",

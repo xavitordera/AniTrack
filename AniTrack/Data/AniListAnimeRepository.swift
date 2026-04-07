@@ -24,19 +24,9 @@ final class AniListAnimeRepository: AnimeRepository {
         let airing = mapMediaCards(payload.airing?.media?.compactMap { $0?.fragments.mediaCard })
 
         let featured = trending.first ?? seasonPopular.first
-        let continueWatching = Array(seasonPopular.prefix(3)).enumerated().map { index, anime in
-            let defaultProgress = [0.36, 0.58, 0.79]
-            return ContinueWatchingItem(
-                id: anime.id,
-                anime: anime,
-                progress: defaultProgress[min(index, defaultProgress.count - 1)]
-            )
-        }
-
         return HomeFeed(
             featured: featured,
             trending: seasonPopular,
-            continueWatching: continueWatching,
             recommended: recommended,
             airingToday: airing
         )
