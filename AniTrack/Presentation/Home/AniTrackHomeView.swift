@@ -117,7 +117,7 @@ struct AniTrackHomeView: View {
 
             skeletonSectionHeader
             let columns = recommendedColumns(contentWidth: contentWidth)
-            LazyVGrid(columns: columns, spacing: 14) {
+            LazyVGrid(columns: columns, spacing: 18) {
                 ForEach(0..<6, id: \.self) { _ in
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(AniTrackTheme.card.opacity(0.7))
@@ -332,7 +332,7 @@ struct AniTrackHomeView: View {
             sectionHeader(title: "Recommended For You")
 
             let columns = recommendedColumns(contentWidth: contentWidth)
-            LazyVGrid(columns: columns, spacing: 14) {
+            LazyVGrid(columns: columns, spacing: 18) {
                 ForEach(viewModel.recommended.prefix(8)) { anime in
                     NavigationLink {
                         detailDestination(animeID: anime.id)
@@ -347,7 +347,7 @@ struct AniTrackHomeView: View {
 
     private func recommendedColumns(contentWidth: CGFloat) -> [GridItem] {
         let count = contentWidth > 430 ? 3 : 2
-        return Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: count)
+        return Array(repeating: GridItem(.flexible(), spacing: 16, alignment: .top), count: count)
     }
 
     private func heroHeight(contentWidth: CGFloat) -> CGFloat {
