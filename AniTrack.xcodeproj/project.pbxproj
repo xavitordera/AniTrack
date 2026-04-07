@@ -216,6 +216,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				10C2DE972CE3D7D90093D2CD /* XCRemoteSwiftPackageReference "apollo-ios" */,
+				B7A15C212D00000100000001 /* XCRemoteSwiftPackageReference "Sourcery" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 10DB5E892CE3D3030035DBB4 /* Products */;
@@ -577,6 +578,14 @@
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 1.20.0;
+			};
+		};
+		B7A15C212D00000100000001 /* XCRemoteSwiftPackageReference "Sourcery" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/krzysztofzablocki/Sourcery.git";
+			requirement = {
+				branch = master;
+				kind = branch;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

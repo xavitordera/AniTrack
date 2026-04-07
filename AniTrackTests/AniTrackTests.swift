@@ -757,8 +757,8 @@ final class AniTrackTests: XCTestCase {
                         "__typename": "UserStatistics",
                         "count": 2,
                         "meanScore": 0.0,
-                        "minutesWatched": 0,
-                        "episodesWatched": 0,
+                        "minutesWatched": 340,
+                        "episodesWatched": 15,
                         "genres": [],
                         "studios": [],
                         "statuses": []
@@ -971,112 +971,6 @@ private enum MockError: Error {
     case failed
 }
 
-private struct MockAnimeRepository: AnimeRepository {
-    let result: Result<HomeFeed, Error>
-    var discoverHandler: (Int, DiscoverFilters) async throws -> DiscoverPage = { _, _ in
-        DiscoverPage(media: [], hasNextPage: false)
-    }
-    var detailHandler: (Int) async throws -> AnimeDetail = { _ in
-        throw MockError.failed
-    }
-    var nextAiringHandler: (Int) async throws -> AiringScheduleInfo? = { _ in
-        nil
-    }
-
-    func fetchHomeFeed() async throws -> HomeFeed {
-        try result.get()
-    }
-
-    func fetchAnimeDetail(id: Int) async throws -> AnimeDetail {
-        try await detailHandler(id)
-    }
-
-    func fetchDiscover(page: Int, filters: DiscoverFilters) async throws -> DiscoverPage {
-        try await discoverHandler(page, filters)
-    }
-
-    func fetchNextAiring(mediaID: Int) async throws -> AiringScheduleInfo? {
-        try await nextAiringHandler(mediaID)
-    }
-}
-
-private final class MockListRepository: MyListRepository {
-    private let viewerResult: AniListViewer?
-    private let cachedViewerResult: AniListViewer?
-    private let entriesResult: [MediaListEntry]
-    private let saveResult: MediaListEntry?
-    private let bulkResult: [MediaListEntry]
-    private let entryByMediaID: [Int: MediaListEntry]
-    private let deleteResult: Bool
-    private let error: Error?
-    private(set) var lastSavedPatch: MediaListEntryPatch?
-    private(set) var deletedIDs: [Int] = []
-    private(set) var fetchViewerCallCount = 0
-
-    init(
-        cachedViewer: AniListViewer? = nil,
-        viewer: AniListViewer? = nil,
-        entries: [MediaListEntry] = [],
-        entryByMediaID: [Int: MediaListEntry] = [:],
-        saveResult: MediaListEntry? = nil,
-        bulkResult: [MediaListEntry]? = nil,
-        deleteResult: Bool = true,
-        error: Error? = nil
-    ) {
-        self.cachedViewerResult = cachedViewer
-        self.viewerResult = viewer
-        self.entriesResult = entries
-        self.entryByMediaID = entryByMediaID
-        self.saveResult = saveResult
-        self.bulkResult = bulkResult ?? entries
-        self.deleteResult = deleteResult
-        self.error = error
-    }
-
-    func cachedViewer() -> AniListViewer? {
-        cachedViewerResult
-    }
-
-    func fetchViewer() async throws -> AniListViewer {
-        fetchViewerCallCount += 1
-        if let error { throw error }
-        guard let viewer = viewerResult else {
-            throw MockError.failed
-        }
-        return viewer
-    }
-
-    func fetchEntry(mediaID: Int) async throws -> MediaListEntry? {
-        if let error { throw error }
-        return entryByMediaID[mediaID]
-    }
-
-    func fetchMyListEntries() async throws -> [MediaListEntry] {
-        if let error { throw error }
-        return entriesResult
-    }
-
-    func saveEntry(_ update: MediaListEntryPatch) async throws -> MediaListEntry {
-        lastSavedPatch = update
-        if let error { throw error }
-        guard let saveResult else {
-            throw MockError.failed
-        }
-        return saveResult
-    }
-
-    func deleteEntry(id: Int) async throws -> Bool {
-        if let error { throw error }
-        deletedIDs.append(id)
-        return deleteResult
-    }
-
-    func bulkSave(_ updates: [MediaListEntryPatch]) async throws -> [MediaListEntry] {
-        if let error { throw error }
-        return bulkResult
-    }
-}
-
 private final class MockStatsService: StatsService {
     private let result: Result<StatsDashboard, Error>
     private(set) var fetchCount = 0
@@ -1090,7 +984,6 @@ private final class MockStatsService: StatsService {
         return try result.get()
     }
 }
-
 private final class MockGraphQLService: AniListGraphQLServing {
     var viewerData: AniTrackAPI.ViewerQuery.Data?
     var mediaListCollectionData: AniTrackAPI.MediaListCollectionQuery.Data?
@@ -1151,21 +1044,5 @@ private final class MockGraphQLService: AniListGraphQLServing {
         default:
             throw MockError.failed
         }
-    }
-}
-
-private final class MockReminderScheduler: ReminderScheduling {
-    private let result: Result<Bool, Error>
-    private(set) var lastAnimeID: Int?
-    private(set) var lastEpisode: Int?
-
-    init(result: Result<Bool, Error>) {
-        self.result = result
-    }
-
-    func scheduleAiringReminder(animeID: Int, animeTitle: String, episode: Int, airingAt: Date) async throws -> Bool {
-        lastAnimeID = animeID
-        lastEpisode = episode
-        return try result.get()
     }
 }

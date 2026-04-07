@@ -1,0 +1,8 @@
+sources:
+  - ../AniTrack/Domain/AnimeRepository.swift
+  - ../AniTrack/Domain/MyListRepository.swift
+  - ../AniTrack/Core/LocalNotificationScheduler.swift
+templates:
+  - Sourcery/Templates/AutoMockable.stencil
+output:
+  Generated/AutoMockable.generated.swift
