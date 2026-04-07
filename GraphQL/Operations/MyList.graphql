@@ -1,0 +1,101 @@
+query ViewerProfile {
+  Viewer {
+    id
+    name
+  }
+}
+
+query MyAnimeListCollection {
+  MediaListCollection(type: ANIME) {
+    lists {
+      name
+      isCustomList
+      status
+      entries {
+        id
+        status
+        score
+        progress
+        startedAt {
+          year
+          month
+          day
+        }
+        completedAt {
+          year
+          month
+          day
+        }
+        media {
+          id
+          episodes
+          title {
+            romaji
+            english
+            userPreferred
+          }
+          coverImage {
+            extraLarge
+            large
+          }
+          genres
+        }
+      }
+    }
+  }
+}
+
+mutation SaveMyAnimeListEntry(
+  $id: Int
+  $mediaId: Int
+  $status: MediaListStatus
+  $score: Float
+  $progress: Int
+  $startedAt: FuzzyDateInput
+  $completedAt: FuzzyDateInput
+) {
+  SaveMediaListEntry(
+    id: $id
+    mediaId: $mediaId
+    status: $status
+    score: $score
+    progress: $progress
+    startedAt: $startedAt
+    completedAt: $completedAt
+  ) {
+    id
+    status
+    score
+    progress
+    startedAt {
+      year
+      month
+      day
+    }
+    completedAt {
+      year
+      month
+      day
+    }
+    media {
+      id
+      episodes
+      title {
+        romaji
+        english
+        userPreferred
+      }
+      coverImage {
+        extraLarge
+        large
+      }
+      genres
+    }
+  }
+}
+
+mutation DeleteMyAnimeListEntry($id: Int) {
+  DeleteMediaListEntry(id: $id) {
+    deleted
+  }
+}

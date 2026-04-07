@@ -47,34 +47,15 @@ struct RootTabView: View {
                 Label("My List", systemImage: "bookmark.fill")
             }
 
-            PlaceholderScreen(title: "Stats", icon: "chart.bar.fill")
+            StatsView(
+                viewModel: StatsViewModel(service: container.statsService),
+                authStore: container.authStore
+            )
                 .tabItem {
                     Label("Stats", systemImage: "chart.bar.fill")
                 }
         }
         .tint(AniTrackTheme.accent)
-    }
-}
-
-private struct PlaceholderScreen: View {
-    let title: String
-    let icon: String
-
-    var body: some View {
-        ZStack {
-            AniTrackTheme.background.ignoresSafeArea()
-            VStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(AniTrackTheme.accent)
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                Text("Coming soon")
-                    .font(.subheadline)
-                    .foregroundStyle(AniTrackTheme.mutedText)
-            }
-        }
     }
 }
 

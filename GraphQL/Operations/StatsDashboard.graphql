@@ -1,0 +1,55 @@
+query UserAnimeStatistics {
+  Viewer {
+    id
+    name
+    statistics {
+      anime {
+        count
+        meanScore
+        minutesWatched
+        episodesWatched
+        genres(limit: 8, sort: [COUNT_DESC]) {
+          genre
+          count
+        }
+        studios(limit: 5, sort: [COUNT_DESC]) {
+          count
+          studio {
+            id
+            name
+          }
+        }
+        statuses(sort: [COUNT_DESC]) {
+          status
+          count
+        }
+      }
+    }
+  }
+}
+
+query UserAnimeStatisticsFallback($userId: Int) {
+  MediaListCollection(userId: $userId, type: ANIME) {
+    lists {
+      status
+      entries {
+        id
+        status
+        score
+        progress
+        media {
+          id
+          episodes
+          duration
+          genres
+          studios {
+            nodes {
+              id
+              name
+            }
+          }
+        }
+      }
+    }
+  }
+}
